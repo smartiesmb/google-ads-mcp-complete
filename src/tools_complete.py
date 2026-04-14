@@ -21,6 +21,7 @@ from .tools_extensions import ExtensionTools
 from .tools_audiences import AudienceTools
 from .tools_geography import GeographyTools
 from .tools_bidding import BiddingTools
+from .tools_conversions import ConversionTools
 from .utils import currency_to_micros, micros_to_currency
 
 logger = structlog.get_logger(__name__)
@@ -45,7 +46,8 @@ class GoogleAdsTools:
         self.audience_tools = AudienceTools(auth_manager, error_handler)
         self.geography_tools = GeographyTools(auth_manager, error_handler)
         self.bidding_tools = BiddingTools(auth_manager, error_handler)
-        
+        self.conversion_tools = ConversionTools(auth_manager, error_handler)
+
         self._tools_registry = self._register_all_tools()
         
     def _register_all_tools(self) -> Dict[str, Dict[str, Any]]:
@@ -91,11 +93,136 @@ class GoogleAdsTools:
         
         # Bidding Strategy & Bid Adjustments
         tools.update(self._register_bidding_tools())
-        
+
+        # Conversion Tracking & Offline Uploads
+        tools.update(self._register_conversion_tools())
+
         # # Advanced Features
         # tools.update(self._register_advanced_tools())
-        
+
         return tools
+
+    def _register_conversion_tools(self) -> Dict[str, Dict[str, Any]]:
+        """Register conversion tracking and offline upload tools."""
+        return {
+            "create_conversion_action": {
+                "description": "Create a conversion action (event). Category examples: LEAD, PURCHASE, SIGNUP, SUBMIT_LEAD_FORM, PHONE_CALL_LEAD, BOOK_APPOINTMENT, REQUEST_QUOTE, CONTACT, DOWNLOAD, ADD_TO_CART. Type examples: WEBPAGE (default for website events), UPLOAD_CLICKS (offline conversions via GCLID), UPLOAD_CALLS (offline call conversions), WEBSITE_CALL, CLICK_TO_CALL.",
+                "handler": self.conversion_tools.create_conversion_action,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "name": {"type": "string", "required": True},
+                    "category": {"type": "string", "default": "LEAD"},
+                    "action_type": {"type": "string", "default": "WEBPAGE", "description": "WEBPAGE, UPLOAD_CLICKS, UPLOAD_CALLS, WEBSITE_CALL, CLICK_TO_CALL"},
+                    "value": {"type": "number", "description": "Default conversion value"},
+                    "currency_code": {"type": "string", "default": "CHF"},
+                    "count_type": {"type": "string", "default": "ONE_PER_CLICK", "description": "ONE_PER_CLICK for leads, MANY_PER_CLICK for sales"},
+                    "click_through_lookback_days": {"type": "number", "default": 30},
+                    "view_through_lookback_days": {"type": "number", "default": 1},
+                    "include_in_conversions_metric": {"type": "boolean", "default": True},
+                    "status": {"type": "string", "default": "ENABLED"},
+                },
+            },
+            "list_conversion_actions": {
+                "description": "List all conversion actions in the account with status, category, counting type, and default value",
+                "handler": self.conversion_tools.list_conversion_actions,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "status": {"type": "string", "description": "Optional filter: ENABLED, REMOVED, HIDDEN"},
+                },
+            },
+            "get_conversion_action": {
+                "description": "Get full details of a conversion action INCLUDING the HTML tag snippets (global_site_tag + event_snippet) to paste on the website",
+                "handler": self.conversion_tools.get_conversion_action,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "conversion_action_id": {"type": "string", "required": True},
+                },
+            },
+            "update_conversion_action": {
+                "description": "Update a conversion action (rename, change status, value, currency, lookback window, or inclusion in main Conversions metric)",
+                "handler": self.conversion_tools.update_conversion_action,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "conversion_action_id": {"type": "string", "required": True},
+                    "name": {"type": "string"},
+                    "status": {"type": "string", "description": "ENABLED, REMOVED, HIDDEN"},
+                    "value": {"type": "number"},
+                    "currency_code": {"type": "string"},
+                    "include_in_conversions_metric": {"type": "boolean"},
+                    "click_through_lookback_days": {"type": "number"},
+                },
+            },
+            "remove_conversion_action": {
+                "description": "Remove (delete) a conversion action permanently",
+                "handler": self.conversion_tools.remove_conversion_action,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "conversion_action_id": {"type": "string", "required": True},
+                },
+            },
+            "upload_click_conversion": {
+                "description": "Upload an offline click conversion via GCLID (Google Click Identifier). Use this to feed back real signals like signed contracts, qualified leads, or any event that happens off-site after a Google Ads click.",
+                "handler": self.conversion_tools.upload_click_conversion,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "conversion_action_id": {"type": "string", "required": True},
+                    "gclid": {"type": "string", "required": True, "description": "Google Click Identifier captured on landing page"},
+                    "conversion_date_time": {"type": "string", "required": True, "description": "Format: 'YYYY-MM-DD HH:MM:SS+HH:MM' with timezone"},
+                    "conversion_value": {"type": "number"},
+                    "currency_code": {"type": "string", "default": "CHF"},
+                    "order_id": {"type": "string", "description": "Deduplication key, recommended"},
+                },
+            },
+            "upload_call_conversion": {
+                "description": "Upload an offline call conversion identified by caller phone number and call start time",
+                "handler": self.conversion_tools.upload_call_conversion,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "conversion_action_id": {"type": "string", "required": True},
+                    "caller_id": {"type": "string", "required": True, "description": "E.164 phone number, e.g. '+41791234567'"},
+                    "call_start_date_time": {"type": "string", "required": True},
+                    "conversion_date_time": {"type": "string", "required": True},
+                    "conversion_value": {"type": "number"},
+                    "currency_code": {"type": "string", "default": "CHF"},
+                },
+            },
+            "list_customer_conversion_goals": {
+                "description": "List account-level conversion goals. Each goal is a (category, origin) pair with a biddable flag. biddable=True means conversion actions of this type are Primary (count in Conversions metric, used for Smart Bidding). biddable=False means Secondary (observation only).",
+                "handler": self.conversion_tools.list_customer_conversion_goals,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                },
+            },
+            "update_customer_conversion_goal": {
+                "description": "Set a (category, origin) conversion goal as Primary (biddable=true) or Secondary (biddable=false). Use this to demote phone_click or engagement actions without editing each conversion_action. Category examples: PURCHASE, LEAD, SUBMIT_LEAD_FORM, PHONE_CALL_LEAD, BOOK_APPOINTMENT, ENGAGEMENT. Origin examples: WEBSITE, APP, CALL_FROM_ADS, GOOGLE_HOSTED, STORE.",
+                "handler": self.conversion_tools.update_customer_conversion_goal,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "category": {"type": "string", "required": True, "description": "Conversion action category (e.g. PHONE_CALL_LEAD)"},
+                    "origin": {"type": "string", "required": True, "description": "Conversion origin (e.g. WEBSITE)"},
+                    "biddable": {"type": "boolean", "required": True, "description": "true=Primary, false=Secondary"},
+                },
+            },
+            "list_campaign_conversion_goals": {
+                "description": "List campaign-level overrides for conversion goals. Shows which campaigns have a (category, origin) override that differs from the account-level customer_conversion_goal. Optional filter by campaign_id.",
+                "handler": self.conversion_tools.list_campaign_conversion_goals,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "campaign_id": {"type": "string", "description": "Optional filter on a specific campaign"},
+                },
+            },
+            "update_campaign_conversion_goal": {
+                "description": "Set a campaign-level override for a (category, origin) conversion goal (biddable true=Primary / false=Secondary). Overrides the account default for this campaign only.",
+                "handler": self.conversion_tools.update_campaign_conversion_goal,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "campaign_id": {"type": "string", "required": True},
+                    "category": {"type": "string", "required": True},
+                    "origin": {"type": "string", "required": True},
+                    "biddable": {"type": "boolean", "required": True},
+                },
+            },
+        }
         
     def _register_account_tools(self) -> Dict[str, Dict[str, Any]]:
         """Register account management tools."""
