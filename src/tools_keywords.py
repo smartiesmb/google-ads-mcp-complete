@@ -153,10 +153,20 @@ class KeywordTools:
                     )
                     criterion.negative = True
                     
-                    # Create KeywordInfo object properly
+                    # Detect match type from keyword wrapping: "phrase" -> PHRASE, [exact] -> EXACT, else BROAD
+                    raw = keyword_text.strip()
+                    if len(raw) >= 2 and raw.startswith('"') and raw.endswith('"'):
+                        match_type = client.enums.KeywordMatchTypeEnum.PHRASE
+                        text = raw[1:-1]
+                    elif len(raw) >= 2 and raw.startswith('[') and raw.endswith(']'):
+                        match_type = client.enums.KeywordMatchTypeEnum.EXACT
+                        text = raw[1:-1]
+                    else:
+                        match_type = client.enums.KeywordMatchTypeEnum.BROAD
+                        text = raw
                     keyword_info = client.get_type("KeywordInfo")
-                    keyword_info.text = keyword_text
-                    keyword_info.match_type = client.enums.KeywordMatchTypeEnum.BROAD
+                    keyword_info.text = text
+                    keyword_info.match_type = match_type
                     criterion.keyword = keyword_info
                     
                     operations.append(operation)
@@ -183,10 +193,20 @@ class KeywordTools:
                     )
                     criterion.negative = True
                     
-                    # Create KeywordInfo object properly
+                    # Detect match type from keyword wrapping: "phrase" -> PHRASE, [exact] -> EXACT, else BROAD
+                    raw = keyword_text.strip()
+                    if len(raw) >= 2 and raw.startswith('"') and raw.endswith('"'):
+                        match_type = client.enums.KeywordMatchTypeEnum.PHRASE
+                        text = raw[1:-1]
+                    elif len(raw) >= 2 and raw.startswith('[') and raw.endswith(']'):
+                        match_type = client.enums.KeywordMatchTypeEnum.EXACT
+                        text = raw[1:-1]
+                    else:
+                        match_type = client.enums.KeywordMatchTypeEnum.BROAD
+                        text = raw
                     keyword_info = client.get_type("KeywordInfo")
-                    keyword_info.text = keyword_text
-                    keyword_info.match_type = client.enums.KeywordMatchTypeEnum.BROAD
+                    keyword_info.text = text
+                    keyword_info.match_type = match_type
                     criterion.keyword = keyword_info
                     
                     operations.append(operation)
