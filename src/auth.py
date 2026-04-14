@@ -156,11 +156,12 @@ class GoogleAdsAuthManager:
                 "use_proto_plus": self.config.get("use_proto_plus", True),
             }
             
-            # Add customer IDs
-            if customer_id:
-                client_config["login_customer_id"] = customer_id.replace("-", "")
-            elif login_customer_id := self.config.get("login_customer_id"):
+            # login_customer_id must ALWAYS be the MCC (manager) when accessing client accounts.
+            # The target customer_id is passed per-operation, not as login_customer_id.
+            if login_customer_id := self.config.get("login_customer_id"):
                 client_config["login_customer_id"] = login_customer_id.replace("-", "")
+            elif customer_id:
+                client_config["login_customer_id"] = customer_id.replace("-", "")
                 
             if linked_customer_id := self.config.get("linked_customer_id"):
                 client_config["linked_customer_id"] = linked_customer_id.replace("-", "")
