@@ -292,12 +292,13 @@ class CampaignTools:
 
             if url_custom_parameters is not None:
                 # Empty dict clears parameters; populated dict replaces them wholesale
-                custom_param_type = client.get_type("CustomParameter")
                 params_list = []
                 for key, value in url_custom_parameters.items():
                     # Strip leading underscore if user accidentally included it
                     clean_key = key.lstrip("_")
-                    p = custom_param_type(key=clean_key, value=str(value))
+                    p = client.get_type("CustomParameter")
+                    p.key = clean_key
+                    p.value = str(value)
                     params_list.append(p)
                 # Replace the full list: clear then extend (protobuf repeated field pattern)
                 del campaign.url_custom_parameters[:]

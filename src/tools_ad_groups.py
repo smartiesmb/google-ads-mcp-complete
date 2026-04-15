@@ -230,11 +230,12 @@ class AdGroupTools:
                 paths.append("final_url_suffix")
 
             if url_custom_parameters is not None:
-                custom_param_type = client.get_type("CustomParameter")
                 params_list = []
                 for key, value in url_custom_parameters.items():
                     clean_key = key.lstrip("_")
-                    p = custom_param_type(key=clean_key, value=str(value))
+                    p = client.get_type("CustomParameter")
+                    p.key = clean_key
+                    p.value = str(value)
                     params_list.append(p)
                 del ad_group.url_custom_parameters[:]
                 ad_group.url_custom_parameters.extend(params_list)
