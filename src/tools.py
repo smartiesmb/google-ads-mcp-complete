@@ -279,12 +279,14 @@ class GoogleAdsTools:
                 },
             },
             "list_keywords": {
-                "description": "List keywords with performance data",
+                "description": "List keywords. Default returns complete list from ad_group_criterion. Set include_metrics=True to include clicks/impressions/cost/conversions via keyword_view (filtered by date_range).",
                 "handler": self.list_keywords,
                 "parameters": {
                     "customer_id": {"type": "string", "required": True},
                     "ad_group_id": {"type": "string"},
                     "campaign_id": {"type": "string"},
+                    "include_metrics": {"type": "boolean"},
+                    "date_range": {"type": "string"},
                 },
             },
             

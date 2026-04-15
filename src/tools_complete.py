@@ -611,12 +611,14 @@ class GoogleAdsTools:
                 },
             },
             "list_keywords": {
-                "description": "List keywords with performance data",
+                "description": "List keywords. By default returns the complete list from ad_group_criterion. Set include_metrics=True to query keyword_view and include clicks/impressions/cost/conversions (only returns keywords active in the date range).",
                 "handler": self.keyword_tools.list_keywords,
                 "parameters": {
                     "customer_id": {"type": "string", "required": True},
                     "ad_group_id": {"type": "string"},
                     "campaign_id": {"type": "string"},
+                    "include_metrics": {"type": "boolean", "description": "If true, include performance metrics (queries keyword_view with date filter)."},
+                    "date_range": {"type": "string", "description": "GAQL date range for metrics, e.g. LAST_30_DAYS, LAST_7_DAYS. Only used when include_metrics=true."},
                 },
             },
             "update_keyword_bid": {

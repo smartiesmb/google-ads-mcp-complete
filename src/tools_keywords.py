@@ -271,45 +271,78 @@ class KeywordTools:
         self,
         customer_id: str,
         ad_group_id: Optional[str] = None,
-        campaign_id: Optional[str] = None
+        campaign_id: Optional[str] = None,
+        include_metrics: bool = False,
+        date_range: str = "LAST_30_DAYS",
     ) -> Dict[str, Any]:
-        """List keywords with performance data."""
+        """List keywords with optional performance data.
+
+        Args:
+            customer_id: Customer ID
+            ad_group_id: Optional filter on ad group
+            campaign_id: Optional filter on campaign
+            include_metrics: If True, query keyword_view with a date filter and
+                return clicks/impressions/cost/conversions per keyword.
+                If False (default), return the complete keyword list from
+                ad_group_criterion without activity requirement.
+            date_range: GAQL date range for metrics (e.g. LAST_30_DAYS, LAST_7_DAYS).
+                Only used when include_metrics=True.
+        """
         try:
             client = self.auth_manager.get_client(customer_id)
             googleads_service = client.get_service("GoogleAdsService")
-            
-            # Build query
-            query = """
-                SELECT
-                    ad_group_criterion.criterion_id,
-                    ad_group_criterion.keyword.text,
-                    ad_group_criterion.keyword.match_type,
-                    ad_group_criterion.status,
-                    ad_group_criterion.cpc_bid_micros,
-                    ad_group_criterion.negative,
-                    ad_group.id,
-                    ad_group.name,
-                    campaign.id,
-                    campaign.name,
-                    metrics.clicks,
-                    metrics.impressions,
-                    metrics.cost_micros,
-                    metrics.conversions
-                FROM ad_group_criterion
-                WHERE ad_group_criterion.type = KEYWORD
-            """
-            
+
+            if include_metrics:
+                # keyword_view exposes both criterion attributes AND metrics,
+                # but only returns keywords active during the date range.
+                query = f"""
+                    SELECT
+                        ad_group_criterion.criterion_id,
+                        ad_group_criterion.keyword.text,
+                        ad_group_criterion.keyword.match_type,
+                        ad_group_criterion.status,
+                        ad_group_criterion.cpc_bid_micros,
+                        ad_group_criterion.negative,
+                        ad_group.id,
+                        ad_group.name,
+                        campaign.id,
+                        campaign.name,
+                        metrics.clicks,
+                        metrics.impressions,
+                        metrics.cost_micros,
+                        metrics.conversions
+                    FROM keyword_view
+                    WHERE ad_group_criterion.type = KEYWORD
+                      AND segments.date DURING {date_range}
+                """
+            else:
+                # ad_group_criterion returns the complete list regardless of activity.
+                # Metrics cannot be selected from this resource in API v21.
+                query = """
+                    SELECT
+                        ad_group_criterion.criterion_id,
+                        ad_group_criterion.keyword.text,
+                        ad_group_criterion.keyword.match_type,
+                        ad_group_criterion.status,
+                        ad_group_criterion.cpc_bid_micros,
+                        ad_group_criterion.negative,
+                        ad_group.id,
+                        ad_group.name,
+                        campaign.id,
+                        campaign.name
+                    FROM ad_group_criterion
+                    WHERE ad_group_criterion.type = KEYWORD
+                """
+
             # Add filters
             conditions = []
             if ad_group_id:
                 conditions.append(f"ad_group.id = {ad_group_id}")
             if campaign_id:
                 conditions.append(f"campaign.id = {campaign_id}")
-                
+
             if conditions:
                 query += " AND " + " AND ".join(conditions)
-                
-            query += " AND segments.date DURING LAST_30_DAYS"
                 
             response = googleads_service.search(
                 customer_id=customer_id, query=query
@@ -330,24 +363,26 @@ class KeywordTools:
                     "campaign_name": str(row.campaign.name)
                 }
                 
-                # Add performance metrics if available
-                if hasattr(row, 'metrics'):
+                # Only attach metrics when include_metrics=True (keyword_view path)
+                if include_metrics:
                     keyword_data["metrics"] = {
                         "clicks": int(row.metrics.clicks),
                         "impressions": int(row.metrics.impressions),
                         "cost": micros_to_currency(row.metrics.cost_micros),
                         "conversions": float(row.metrics.conversions)
                     }
-                
+
                 keywords.append(keyword_data)
-            
+
             return {
                 "success": True,
                 "keywords": keywords,
                 "count": len(keywords),
                 "filters": {
                     "ad_group_id": ad_group_id,
-                    "campaign_id": campaign_id
+                    "campaign_id": campaign_id,
+                    "include_metrics": include_metrics,
+                    "date_range": date_range if include_metrics else None,
                 }
             }
             
