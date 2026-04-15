@@ -611,7 +611,7 @@ class GoogleAdsTools:
                 },
             },
             "list_keywords": {
-                "description": "List keywords. By default returns the complete list from ad_group_criterion. Set include_metrics=True to query keyword_view and include clicks/impressions/cost/conversions (only returns keywords active in the date range).",
+                "description": "List keywords. By default returns ad_group-level keywords AND campaign-level negative keywords. Set include_metrics=True to include clicks/impressions/cost/conversions (only returns keywords active in the date range). Set include_campaign_negatives=False to skip the campaign-level negatives query.",
                 "handler": self.keyword_tools.list_keywords,
                 "parameters": {
                     "customer_id": {"type": "string", "required": True},
@@ -619,6 +619,7 @@ class GoogleAdsTools:
                     "campaign_id": {"type": "string"},
                     "include_metrics": {"type": "boolean", "description": "If true, include performance metrics (queries keyword_view with date filter)."},
                     "date_range": {"type": "string", "description": "GAQL date range for metrics, e.g. LAST_30_DAYS, LAST_7_DAYS. Only used when include_metrics=true."},
+                    "include_campaign_negatives": {"type": "boolean", "description": "If true (default), also fetch campaign-level negative keywords."},
                 },
             },
             "update_keyword_bid": {

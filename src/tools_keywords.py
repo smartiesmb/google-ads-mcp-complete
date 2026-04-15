@@ -274,6 +274,7 @@ class KeywordTools:
         campaign_id: Optional[str] = None,
         include_metrics: bool = False,
         date_range: str = "LAST_30_DAYS",
+        include_campaign_negatives: bool = True,
     ) -> Dict[str, Any]:
         """List keywords with optional performance data.
 
@@ -287,6 +288,10 @@ class KeywordTools:
                 ad_group_criterion without activity requirement.
             date_range: GAQL date range for metrics (e.g. LAST_30_DAYS, LAST_7_DAYS).
                 Only used when include_metrics=True.
+            include_campaign_negatives: If True (default), also fetch campaign-level
+                negative keywords from campaign_criterion and merge them into the
+                result (with level="campaign"). Set to False to skip this second
+                query when you only care about ad-group-level keywords.
         """
         try:
             client = self.auth_manager.get_client(customer_id)
@@ -351,6 +356,7 @@ class KeywordTools:
             keywords = []
             for row in response:
                 keyword_data = {
+                    "level": "ad_group",
                     "keyword_id": str(row.ad_group_criterion.criterion_id),
                     "text": str(row.ad_group_criterion.keyword.text),
                     "match_type": str(row.ad_group_criterion.keyword.match_type.name),
@@ -362,7 +368,7 @@ class KeywordTools:
                     "campaign_id": str(row.campaign.id),
                     "campaign_name": str(row.campaign.name)
                 }
-                
+
                 # Only attach metrics when include_metrics=True (keyword_view path)
                 if include_metrics:
                     keyword_data["metrics"] = {
@@ -374,15 +380,57 @@ class KeywordTools:
 
                 keywords.append(keyword_data)
 
+            # Second query: campaign-level negative keywords (campaign_criterion)
+            # These are not exposed in ad_group_criterion and only hold negatives.
+            campaign_negatives = []
+            if include_campaign_negatives and not ad_group_id:
+                neg_query = """
+                    SELECT
+                        campaign_criterion.criterion_id,
+                        campaign_criterion.keyword.text,
+                        campaign_criterion.keyword.match_type,
+                        campaign_criterion.status,
+                        campaign_criterion.negative,
+                        campaign.id,
+                        campaign.name
+                    FROM campaign_criterion
+                    WHERE campaign_criterion.type = KEYWORD
+                      AND campaign_criterion.negative = TRUE
+                """
+                if campaign_id:
+                    neg_query += f" AND campaign.id = {campaign_id}"
+
+                neg_response = googleads_service.search(
+                    customer_id=customer_id, query=neg_query
+                )
+                for row in neg_response:
+                    campaign_negatives.append({
+                        "level": "campaign",
+                        "keyword_id": str(row.campaign_criterion.criterion_id),
+                        "text": str(row.campaign_criterion.keyword.text),
+                        "match_type": str(row.campaign_criterion.keyword.match_type.name),
+                        "status": str(row.campaign_criterion.status.name),
+                        "negative": True,
+                        "ad_group_id": None,
+                        "ad_group_name": None,
+                        "campaign_id": str(row.campaign.id),
+                        "campaign_name": str(row.campaign.name),
+                    })
+
+            all_keywords = keywords + campaign_negatives
+
             return {
                 "success": True,
-                "keywords": keywords,
-                "count": len(keywords),
+                "keywords": all_keywords,
+                "count": len(all_keywords),
+                "count_ad_group_level": len(keywords),
+                "count_campaign_negatives": len(campaign_negatives),
                 "filters": {
                     "ad_group_id": ad_group_id,
                     "campaign_id": campaign_id,
                     "include_metrics": include_metrics,
                     "date_range": date_range if include_metrics else None,
+                    "include_campaign_negatives": include_campaign_negatives,
                 }
             }
             
