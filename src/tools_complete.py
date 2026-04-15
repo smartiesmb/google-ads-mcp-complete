@@ -622,6 +622,29 @@ class GoogleAdsTools:
                     "include_campaign_negatives": {"type": "boolean", "description": "If true (default), also fetch campaign-level negative keywords."},
                 },
             },
+            "generate_keyword_ideas": {
+                "description": "Keyword Planner: generate keyword ideas with Swiss-targeted avg monthly searches, competition, and CPC top-of-page bid ranges. Seeds can be keywords, a URL, or both.",
+                "handler": self.keyword_tools.generate_keyword_ideas,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "keywords": {"type": "array", "description": "Seed keywords (strings)."},
+                    "url": {"type": "string", "description": "Optional seed URL for content-based ideas."},
+                    "language": {"type": "string", "description": "Language shortcut FR/EN/DE/IT/ES or raw language_constant ID. Default FR."},
+                    "locations": {"type": "array", "description": "Country shortcuts (CH, FR, DE...) or raw geo_target_constant IDs. Default ['CH']."},
+                    "include_adult": {"type": "boolean"},
+                    "page_size": {"type": "number", "description": "Max ideas returned (default 100)."},
+                },
+            },
+            "generate_keyword_historical_metrics": {
+                "description": "Keyword Planner: historical monthly search volume and CPC ranges for a specific list of keywords, localized to the chosen country (CH by default).",
+                "handler": self.keyword_tools.generate_keyword_historical_metrics,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "keywords": {"type": "array", "required": True, "description": "List of keyword strings to evaluate."},
+                    "language": {"type": "string"},
+                    "locations": {"type": "array"},
+                },
+            },
             "update_keyword_bid": {
                 "description": "Update the CPC bid for a specific keyword",
                 "handler": self.keyword_tools.update_keyword_bid,

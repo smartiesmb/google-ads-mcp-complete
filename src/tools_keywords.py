@@ -996,10 +996,255 @@ class KeywordTools:
         """Get number of days in a date range for calculations."""
         range_mapping = {
             "LAST_7_DAYS": 7,
-            "LAST_14_DAYS": 14, 
+            "LAST_14_DAYS": 14,
             "LAST_30_DAYS": 30,
             "LAST_90_DAYS": 90,
             "TODAY": 1,
             "YESTERDAY": 1,
         }
         return range_mapping.get(date_range, 30)
+
+    # ─────────────────────────────────────────────────────────
+    # KEYWORD PLANNER — Ideas & Historical Metrics
+    # ─────────────────────────────────────────────────────────
+
+    # Common country shortcuts → Google Ads geo_target_constant IDs
+    # Full list: https://developers.google.com/google-ads/api/reference/data/geotargets
+    _GEO_SHORTCUTS = {
+        "CH": "2756",   # Switzerland
+        "FR": "2250",   # France
+        "DE": "2276",   # Germany
+        "IT": "2380",   # Italy
+        "US": "2840",   # United States
+        "UK": "2826",   # United Kingdom
+        "GB": "2826",
+        "BE": "2056",   # Belgium
+        "LU": "2442",   # Luxembourg
+        "AT": "2040",   # Austria
+    }
+
+    # Common language shortcuts → Google Ads language_constant IDs
+    _LANG_SHORTCUTS = {
+        "FR": "1002",   # French
+        "EN": "1000",   # English
+        "DE": "1001",   # German
+        "IT": "1004",   # Italian
+        "ES": "1003",   # Spanish
+    }
+
+    def _resolve_geo(self, geo: str) -> str:
+        """Accept either a shortcut (CH, FR) or a raw geo_target_constant ID."""
+        g = str(geo).upper().strip()
+        return self._GEO_SHORTCUTS.get(g, str(geo))
+
+    def _resolve_lang(self, lang: str) -> str:
+        l = str(lang).upper().strip()
+        return self._LANG_SHORTCUTS.get(l, str(lang))
+
+    def _competition_name(self, enum_value) -> str:
+        try:
+            return enum_value.name if hasattr(enum_value, "name") else str(enum_value)
+        except Exception:
+            return str(enum_value)
+
+    async def generate_keyword_ideas(
+        self,
+        customer_id: str,
+        keywords: Optional[List[str]] = None,
+        url: Optional[str] = None,
+        language: str = "FR",
+        locations: Optional[List[str]] = None,
+        include_adult: bool = False,
+        page_size: int = 100,
+    ) -> Dict[str, Any]:
+        """Generate keyword ideas with avg monthly searches, competition, and CPC ranges.
+
+        Args:
+            customer_id: Google Ads customer ID
+            keywords: List of seed keywords (strings). Mutually exclusive with url-only
+                mode: provide at least one of keywords or url.
+            url: A seed URL. Google derives keywords from its content. Can be combined
+                with seed keywords (URL_AND_KEYWORDS) for broader ideas.
+            language: Language shortcut (FR, EN, DE, IT, ES) or raw language_constant ID.
+            locations: List of country shortcuts (CH, FR, DE, ...) or raw
+                geo_target_constant IDs. Defaults to ["CH"].
+            include_adult: Include adult ideas (default False).
+            page_size: Max ideas returned (default 100, max 10000 per page).
+
+        Returns ideas with:
+            text, avg_monthly_searches, competition, competition_index,
+            low_top_of_page_bid (CPC), high_top_of_page_bid (CPC),
+            annotations (concepts), is_close_variant.
+        """
+        try:
+            if not keywords and not url:
+                return {
+                    "success": False,
+                    "error": "Provide at least one of 'keywords' or 'url'.",
+                    "error_type": "InvalidArgument",
+                }
+
+            client = self.auth_manager.get_client(customer_id)
+            service = client.get_service("KeywordPlanIdeaService")
+
+            request = client.get_type("GenerateKeywordIdeasRequest")
+            request.customer_id = customer_id
+            request.include_adult_keywords = include_adult
+            request.page_size = int(page_size)
+
+            # Language + geo
+            request.language = f"languageConstants/{self._resolve_lang(language)}"
+            for loc in (locations or ["CH"]):
+                request.geo_target_constants.append(
+                    f"geoTargetConstants/{self._resolve_geo(loc)}"
+                )
+
+            # Seed: keywords, url, or both
+            if keywords and url:
+                request.keyword_and_url_seed.url = url
+                request.keyword_and_url_seed.keywords.extend(keywords)
+            elif keywords:
+                request.keyword_seed.keywords.extend(keywords)
+            else:
+                request.url_seed.url = url
+
+            # Default network includes search
+            network_enum = client.enums.KeywordPlanNetworkEnum
+            request.keyword_plan_network = network_enum.GOOGLE_SEARCH_AND_PARTNERS
+
+            response = service.generate_keyword_ideas(request=request)
+
+            ideas = []
+            for idea in response:
+                m = idea.keyword_idea_metrics
+                low = m.low_top_of_page_bid_micros or 0
+                high = m.high_top_of_page_bid_micros or 0
+                ideas.append({
+                    "text": idea.text,
+                    "avg_monthly_searches": int(m.avg_monthly_searches) if m.avg_monthly_searches else 0,
+                    "competition": self._competition_name(m.competition),
+                    "competition_index": int(m.competition_index) if m.competition_index else None,
+                    "low_top_of_page_bid": micros_to_currency(low) if low else None,
+                    "high_top_of_page_bid": micros_to_currency(high) if high else None,
+                    "annotations": list(m.concepts) if hasattr(m, "concepts") else [],
+                    "is_close_variant": bool(idea.close_variants) if hasattr(idea, "close_variants") else False,
+                })
+
+            # Sort by avg monthly searches desc for usability
+            ideas.sort(key=lambda x: x["avg_monthly_searches"] or 0, reverse=True)
+
+            return {
+                "success": True,
+                "count": len(ideas),
+                "language": language,
+                "locations": locations or ["CH"],
+                "seed": {"keywords": keywords or [], "url": url or None},
+                "ideas": ideas,
+            }
+
+        except GoogleAdsException as e:
+            logger.error(f"generate_keyword_ideas failed: {e}")
+            return self.error_handler.format_error_response(e)
+        except Exception as e:
+            logger.error(f"Unexpected error in generate_keyword_ideas: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "error_type": "UnexpectedError",
+            }
+
+    async def generate_keyword_historical_metrics(
+        self,
+        customer_id: str,
+        keywords: List[str],
+        language: str = "FR",
+        locations: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """Fetch historical monthly search volume and CPC ranges for specific keywords.
+
+        Use this when you already know the keywords you want to evaluate (e.g.
+        before adding them to an ad group) and need Switzerland-specific data.
+
+        Args:
+            customer_id: Google Ads customer ID
+            keywords: List of keyword strings to evaluate (max ~10000 per call)
+            language: FR/EN/DE/IT/ES shortcut or raw language_constant ID
+            locations: Country shortcuts (CH default) or raw geo_target_constant IDs
+
+        Returns per keyword:
+            text, avg_monthly_searches, competition, competition_index,
+            low_top_of_page_bid, high_top_of_page_bid, monthly_search_volumes
+        """
+        try:
+            if not keywords:
+                return {
+                    "success": False,
+                    "error": "Provide at least one keyword.",
+                    "error_type": "InvalidArgument",
+                }
+
+            client = self.auth_manager.get_client(customer_id)
+            service = client.get_service("KeywordPlanIdeaService")
+
+            request = client.get_type("GenerateKeywordHistoricalMetricsRequest")
+            request.customer_id = customer_id
+            request.keywords.extend(keywords)
+
+            request.language = f"languageConstants/{self._resolve_lang(language)}"
+            for loc in (locations or ["CH"]):
+                request.geo_target_constants.append(
+                    f"geoTargetConstants/{self._resolve_geo(loc)}"
+                )
+
+            response = service.generate_keyword_historical_metrics(request=request)
+
+            results = []
+            for item in response.results:
+                m = item.keyword_metrics
+                low = m.low_top_of_page_bid_micros or 0
+                high = m.high_top_of_page_bid_micros or 0
+
+                monthly_volumes = []
+                try:
+                    for v in m.monthly_search_volumes:
+                        monthly_volumes.append({
+                            "year": int(v.year) if v.year else None,
+                            "month": self._competition_name(v.month),
+                            "searches": int(v.monthly_searches) if v.monthly_searches else 0,
+                        })
+                except Exception:
+                    pass
+
+                results.append({
+                    "text": item.text,
+                    "close_variants": list(item.close_variants) if hasattr(item, "close_variants") else [],
+                    "avg_monthly_searches": int(m.avg_monthly_searches) if m.avg_monthly_searches else 0,
+                    "competition": self._competition_name(m.competition),
+                    "competition_index": int(m.competition_index) if m.competition_index else None,
+                    "low_top_of_page_bid": micros_to_currency(low) if low else None,
+                    "high_top_of_page_bid": micros_to_currency(high) if high else None,
+                    "monthly_search_volumes": monthly_volumes,
+                })
+
+            # Sort by avg searches desc
+            results.sort(key=lambda x: x["avg_monthly_searches"] or 0, reverse=True)
+
+            return {
+                "success": True,
+                "count": len(results),
+                "language": language,
+                "locations": locations or ["CH"],
+                "keywords_requested": len(keywords),
+                "results": results,
+            }
+
+        except GoogleAdsException as e:
+            logger.error(f"generate_keyword_historical_metrics failed: {e}")
+            return self.error_handler.format_error_response(e)
+        except Exception as e:
+            logger.error(f"Unexpected error in generate_keyword_historical_metrics: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "error_type": "UnexpectedError",
+            }
