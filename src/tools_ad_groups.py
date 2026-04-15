@@ -170,42 +170,76 @@ class AdGroupTools:
         ad_group_id: str,
         name: Optional[str] = None,
         cpc_bid_micros: Optional[int] = None,
-        status: Optional[str] = None
+        status: Optional[str] = None,
+        tracking_url_template: Optional[str] = None,
+        final_url_suffix: Optional[str] = None,
+        url_custom_parameters: Optional[Dict[str, str]] = None,
     ) -> Dict[str, Any]:
-        """Update an existing ad group."""
+        """Update an existing ad group.
+
+        Args:
+            customer_id: The customer ID
+            ad_group_id: The ad group ID
+            name: New ad group name
+            cpc_bid_micros: CPC bid in micros (1 CHF = 1_000_000 micros)
+            status: ENABLED or PAUSED
+            tracking_url_template: Ad group-level tracking URL template (overrides campaign template)
+            final_url_suffix: Parameters appended to the final URL
+            url_custom_parameters: Dict of custom parameters (e.g., {"variant": "local"}
+                becomes {_variant} in templates). Pass {} to clear all.
+        """
         try:
             client = self.auth_manager.get_client(customer_id)
             ad_group_service = client.get_service("AdGroupService")
-            
+
             # Create ad group operation
             ad_group_operation = client.get_type("AdGroupOperation")
             ad_group = ad_group_operation.update
-            
+
             # Set the resource name
             ad_group.resource_name = ad_group_service.ad_group_path(
                 customer_id, ad_group_id
             )
-            
+
             # Set update mask fields (API v21 compatible)
             from google.protobuf.field_mask_pb2 import FieldMask
             update_mask = FieldMask()
             paths = []
-            
+
             if name is not None:
                 ad_group.name = name
                 paths.append("name")
-                
+
             if cpc_bid_micros is not None:
                 ad_group.cpc_bid_micros = cpc_bid_micros
                 paths.append("cpc_bid_micros")
-                
+
             if status is not None:
                 if status.upper() == "ENABLED":
                     ad_group.status = client.enums.AdGroupStatusEnum.ENABLED
                 elif status.upper() == "PAUSED":
                     ad_group.status = client.enums.AdGroupStatusEnum.PAUSED
                 paths.append("status")
-                
+
+            if tracking_url_template is not None:
+                ad_group.tracking_url_template = tracking_url_template
+                paths.append("tracking_url_template")
+
+            if final_url_suffix is not None:
+                ad_group.final_url_suffix = final_url_suffix
+                paths.append("final_url_suffix")
+
+            if url_custom_parameters is not None:
+                custom_param_type = client.get_type("CustomParameter")
+                params_list = []
+                for key, value in url_custom_parameters.items():
+                    clean_key = key.lstrip("_")
+                    p = custom_param_type(key=clean_key, value=str(value))
+                    params_list.append(p)
+                del ad_group.url_custom_parameters[:]
+                ad_group.url_custom_parameters.extend(params_list)
+                paths.append("url_custom_parameters")
+
             update_mask.paths.extend(paths)
             ad_group_operation.update_mask = update_mask
             

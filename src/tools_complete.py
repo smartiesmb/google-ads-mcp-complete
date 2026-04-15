@@ -267,7 +267,7 @@ class GoogleAdsTools:
                 },
             },
             "update_campaign": {
-                "description": "Update campaign settings including assigning portfolio bidding strategies",
+                "description": "Update campaign settings including portfolio bidding, tracking URL template, final URL suffix, and url_custom_parameters",
                 "handler": self.campaign_tools.update_campaign,
                 "parameters": {
                     "customer_id": {"type": "string", "required": True},
@@ -277,6 +277,9 @@ class GoogleAdsTools:
                     "start_date": {"type": "string"},
                     "end_date": {"type": "string"},
                     "bidding_strategy": {"type": "string"},
+                    "tracking_url_template": {"type": "string", "description": "Tracking URL template, e.g. '{lpurl}?src=ads&utm_campaign={campaignid}'"},
+                    "final_url_suffix": {"type": "string", "description": "Parameters appended to final URL"},
+                    "url_custom_parameters": {"type": "object", "description": "Custom parameters (keys without leading underscore). Pass {} to clear."},
                 },
             },
             "pause_campaign": {
@@ -364,7 +367,7 @@ class GoogleAdsTools:
                 },
             },
             "update_ad_group": {
-                "description": "Update ad group settings",
+                "description": "Update ad group settings including tracking URL template, final URL suffix, and url_custom_parameters",
                 "handler": self.ad_group_tools.update_ad_group,
                 "parameters": {
                     "customer_id": {"type": "string", "required": True},
@@ -372,6 +375,9 @@ class GoogleAdsTools:
                     "name": {"type": "string"},
                     "status": {"type": "string"},
                     "cpc_bid_micros": {"type": "number"},
+                    "tracking_url_template": {"type": "string", "description": "Ad group-level tracking URL template (overrides campaign)"},
+                    "final_url_suffix": {"type": "string"},
+                    "url_custom_parameters": {"type": "object", "description": "Custom parameters dict, e.g. {\"variant\": \"local\"} becomes {_variant} in templates. Pass {} to clear."},
                 },
             },
             "list_ad_groups": {

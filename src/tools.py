@@ -78,7 +78,7 @@ class GoogleAdsTools:
                 },
             },
             "update_campaign": {
-                "description": "Update campaign settings",
+                "description": "Update campaign settings (name, status, dates, bidding strategy, tracking URL template, final URL suffix, url_custom_parameters)",
                 "handler": self.campaign_tools.update_campaign,
                 "parameters": {
                     "customer_id": {"type": "string", "required": True},
@@ -87,6 +87,10 @@ class GoogleAdsTools:
                     "status": {"type": "string"},
                     "start_date": {"type": "string"},
                     "end_date": {"type": "string"},
+                    "bidding_strategy": {"type": "string"},
+                    "tracking_url_template": {"type": "string"},
+                    "final_url_suffix": {"type": "string"},
+                    "url_custom_parameters": {"type": "object"},
                 },
             },
             "pause_campaign": {
@@ -135,7 +139,7 @@ class GoogleAdsTools:
                 },
             },
             "update_ad_group": {
-                "description": "Update ad group settings",
+                "description": "Update ad group settings (name, status, bid, tracking URL template, final URL suffix, url_custom_parameters)",
                 "handler": self.update_ad_group,
                 "parameters": {
                     "customer_id": {"type": "string", "required": True},
@@ -143,6 +147,9 @@ class GoogleAdsTools:
                     "name": {"type": "string"},
                     "status": {"type": "string"},
                     "cpc_bid_micros": {"type": "number"},
+                    "tracking_url_template": {"type": "string"},
+                    "final_url_suffix": {"type": "string"},
+                    "url_custom_parameters": {"type": "object"},
                 },
             },
             "list_ad_groups": {

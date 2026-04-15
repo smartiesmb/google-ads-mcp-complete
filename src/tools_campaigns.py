@@ -226,9 +226,12 @@ class CampaignTools:
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
         bidding_strategy: Optional[str] = None,
+        tracking_url_template: Optional[str] = None,
+        final_url_suffix: Optional[str] = None,
+        url_custom_parameters: Optional[Dict[str, str]] = None,
     ) -> Dict[str, Any]:
         """Update campaign settings.
-        
+
         Args:
             customer_id: The customer ID
             campaign_id: The campaign ID to update
@@ -237,21 +240,26 @@ class CampaignTools:
             start_date: New start date (YYYY-MM-DD format)
             end_date: New end date (YYYY-MM-DD format)
             bidding_strategy: Portfolio bidding strategy resource name (e.g., customers/123/biddingStrategies/456)
+            tracking_url_template: Campaign-level tracking URL template
+                (e.g., "{lpurl}?src=ads&utm_source=google&utm_medium=cpc&utm_campaign={campaignid}&utm_content={adgroupid}&utm_term={keyword}")
+            final_url_suffix: Parameters appended to the final URL after landing (e.g., "src=ads&variant={_variant}")
+            url_custom_parameters: Dict of custom parameters (keys without leading underscore,
+                e.g., {"variant": "local"} becomes {_variant} in templates). Pass {} to clear all.
         """
         try:
             client = self.auth_manager.get_client(customer_id)
             campaign_service = client.get_service("CampaignService")
-            
+
             campaign_operation = client.get_type("CampaignOperation")
             campaign = campaign_operation.update
             campaign.resource_name = f"customers/{customer_id}/campaigns/{campaign_id}"
-            
+
             update_mask = []
-            
+
             if name is not None:
                 campaign.name = name
                 update_mask.append("name")
-                
+
             if status is not None:
                 status_enum = client.enums.CampaignStatusEnum
                 status_map = {
@@ -261,18 +269,40 @@ class CampaignTools:
                 }
                 campaign.status = status_map.get(status.upper(), status_enum.PAUSED)
                 update_mask.append("status")
-                
+
             if start_date is not None:
                 campaign.start_date = parse_date(start_date).strftime("%Y%m%d")
                 update_mask.append("start_date")
-                
+
             if end_date is not None:
                 campaign.end_date = parse_date(end_date).strftime("%Y%m%d")
                 update_mask.append("end_date")
-                
+
             if bidding_strategy is not None:
                 campaign.bidding_strategy = bidding_strategy
                 update_mask.append("bidding_strategy")
+
+            if tracking_url_template is not None:
+                campaign.tracking_url_template = tracking_url_template
+                update_mask.append("tracking_url_template")
+
+            if final_url_suffix is not None:
+                campaign.final_url_suffix = final_url_suffix
+                update_mask.append("final_url_suffix")
+
+            if url_custom_parameters is not None:
+                # Empty dict clears parameters; populated dict replaces them wholesale
+                custom_param_type = client.get_type("CustomParameter")
+                params_list = []
+                for key, value in url_custom_parameters.items():
+                    # Strip leading underscore if user accidentally included it
+                    clean_key = key.lstrip("_")
+                    p = custom_param_type(key=clean_key, value=str(value))
+                    params_list.append(p)
+                # Replace the full list: clear then extend (protobuf repeated field pattern)
+                del campaign.url_custom_parameters[:]
+                campaign.url_custom_parameters.extend(params_list)
+                update_mask.append("url_custom_parameters")
                 
             # Set the update mask
             campaign_operation.update_mask.CopyFrom(
