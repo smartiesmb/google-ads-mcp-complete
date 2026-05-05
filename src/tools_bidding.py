@@ -369,6 +369,45 @@ class BiddingTools:
             logger.error(f"Failed to create portfolio bidding strategy: {e}")
             raise
     
+    async def remove_bidding_strategy(
+        self,
+        customer_id: str,
+        bidding_strategy_id: str
+    ) -> Dict[str, Any]:
+        """Remove (delete) a portfolio bidding strategy permanently.
+
+        The strategy must not be attached to any active campaign. If it is,
+        the API will return a CANNOT_REMOVE_ASSOCIATED_STRATEGY error.
+
+        Args:
+            customer_id: The customer ID
+            bidding_strategy_id: The portfolio bidding strategy ID to remove
+        """
+        try:
+            client = self.auth_manager.get_client(customer_id)
+            bidding_strategy_service = client.get_service("BiddingStrategyService")
+
+            operation = client.get_type("BiddingStrategyOperation")
+            operation.remove = (
+                f"customers/{customer_id}/biddingStrategies/{bidding_strategy_id}"
+            )
+
+            response = bidding_strategy_service.mutate_bidding_strategies(
+                customer_id=customer_id,
+                operations=[operation]
+            )
+
+            return {
+                "success": True,
+                "bidding_strategy_id": bidding_strategy_id,
+                "resource_name": response.results[0].resource_name,
+                "message": f"Bidding strategy {bidding_strategy_id} removed successfully"
+            }
+
+        except GoogleAdsException as e:
+            logger.error(f"Failed to remove bidding strategy: {e}")
+            raise
+
     async def list_bidding_strategies(
         self,
         customer_id: str

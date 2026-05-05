@@ -1123,6 +1123,14 @@ class GoogleAdsTools:
                     "customer_id": {"type": "string", "required": True},
                 },
             },
+            "remove_bidding_strategy": {
+                "description": "Remove (delete) a portfolio bidding strategy permanently. Strategy must not be attached to any active campaign.",
+                "handler": self.bidding_tools.remove_bidding_strategy,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "bidding_strategy_id": {"type": "string", "required": True},
+                },
+            },
             "get_device_performance": {
                 "description": "Get performance breakdown by device type (mobile, desktop, tablet)",
                 "handler": self.bidding_tools.get_device_performance,
