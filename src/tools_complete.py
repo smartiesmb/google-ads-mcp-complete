@@ -267,7 +267,7 @@ class GoogleAdsTools:
                 },
             },
             "update_campaign": {
-                "description": "Update campaign settings including portfolio bidding, tracking URL template, final URL suffix, and url_custom_parameters",
+                "description": "Update campaign settings: bidding (portfolio resource name OR standard keyword: MANUAL_CPC, MAXIMIZE_CLICKS, MAXIMIZE_CONVERSIONS, MAXIMIZE_CONVERSION_VALUE), tracking URL, network settings (search/partners/display), CPC bid ceiling for Maximize Clicks (target_spend.cpc_bid_ceiling_micros), URL params.",
                 "handler": self.campaign_tools.update_campaign,
                 "parameters": {
                     "customer_id": {"type": "string", "required": True},
@@ -280,6 +280,31 @@ class GoogleAdsTools:
                     "tracking_url_template": {"type": "string", "description": "Tracking URL template, e.g. '{lpurl}?src=ads&utm_campaign={campaignid}'"},
                     "final_url_suffix": {"type": "string", "description": "Parameters appended to final URL"},
                     "url_custom_parameters": {"type": "object", "description": "Custom parameters (keys without leading underscore). Pass {} to clear."},
+                    "target_search_network": {"type": "boolean", "description": "Toggle Google Search Network (true to enable, false to disable)."},
+                    "target_partner_search_network": {"type": "boolean", "description": "Toggle Google Search Partners (typically false to keep traffic clean)."},
+                    "target_content_network": {"type": "boolean", "description": "Toggle Google Display Network on Search campaigns (typically false)."},
+                    "cpc_bid_ceiling_micros": {"type": "number", "description": "Max CPC bid ceiling in micros for Maximize Clicks (e.g. 4_000_000 = 4 CHF/EUR)."},
+                    "geo_presence_only": {"type": "boolean", "description": "If true, set positive_geo_target_type=PRESENCE (strict: physical presence only). If false, set PRESENCE_OR_INTEREST (broader)."},
+                },
+            },
+            "manage_age_targeting": {
+                "description": "Exclude age ranges from a campaign (creates negative criteria). Accepts age strings: 18_24, 25_34, 35_44, 45_54, 55_64, 65_UP, UNDETERMINED. Default exclusion: ['18_24'] for B2B.",
+                "handler": self.campaign_tools.manage_age_targeting,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "campaign_id": {"type": "string", "required": True},
+                    "exclude_ages": {"type": "array", "description": "Age range keys to exclude (e.g. ['18_24', 'UNDETERMINED'])."},
+                },
+            },
+            "manage_geo_targeting": {
+                "description": "Add geo targeting (include/exclude/radius) to an existing campaign. Resolves location names via geo_target_constant lookup. Use canonical names like 'Auvergne-Rhône-Alpes, France' or 'Lyon, France', or pass numeric geo IDs as strings, or radius_targets with lat/lng + radius_km.",
+                "handler": self.campaign_tools.manage_geo_targeting,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "campaign_id": {"type": "string", "required": True},
+                    "include_locations": {"type": "array", "description": "List of location names or geo IDs to include."},
+                    "exclude_locations": {"type": "array", "description": "List of location names or geo IDs to exclude (negative)."},
+                    "radius_targets": {"type": "array", "description": "List of {latitude, longitude, radius_km} objects for proximity targeting."},
                 },
             },
             "pause_campaign": {
@@ -395,7 +420,7 @@ class GoogleAdsTools:
         """Register ad management tools."""
         return {
             "create_responsive_search_ad": {
-                "description": "Create a responsive search ad",
+                "description": "Create a responsive search ad. Headlines/descriptions accept strings OR dicts with optional pins: [{\"text\": \"...\", \"pinned_field\": \"HEADLINE_2\"}]. Valid headline pins: HEADLINE_1|HEADLINE_2|HEADLINE_3. Valid description pins: DESCRIPTION_1|DESCRIPTION_2.",
                 "handler": self.ad_tools.create_responsive_search_ad,
                 "parameters": {
                     "customer_id": {"type": "string", "required": True},
@@ -554,8 +579,47 @@ class GoogleAdsTools:
                     "asset_type": {"type": "string"},
                 },
             },
+            "remove_customer_asset": {
+                "description": "Detach an asset from the customer (account) level. Requires asset_id and field_type (e.g. SITELINK, CALLOUT, DESCRIPTION, HEADLINE).",
+                "handler": self.asset_tools.remove_customer_asset,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "asset_id": {"type": "string", "required": True},
+                    "field_type": {"type": "string", "required": True},
+                },
+            },
+            "remove_campaign_asset": {
+                "description": "Detach an asset from a specific campaign. Requires campaign_id, asset_id and field_type.",
+                "handler": self.asset_tools.remove_campaign_asset,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "campaign_id": {"type": "string", "required": True},
+                    "asset_id": {"type": "string", "required": True},
+                    "field_type": {"type": "string", "required": True},
+                },
+            },
+            "remove_ad_group_asset": {
+                "description": "Detach an asset from a specific ad group. Requires ad_group_id, asset_id and field_type.",
+                "handler": self.asset_tools.remove_ad_group_asset,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "ad_group_id": {"type": "string", "required": True},
+                    "asset_id": {"type": "string", "required": True},
+                    "field_type": {"type": "string", "required": True},
+                },
+            },
+            "remove_asset_group_asset": {
+                "description": "Detach an asset from a Performance Max asset group. Requires asset_group_id, asset_id and field_type.",
+                "handler": self.asset_tools.remove_asset_group_asset,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "asset_group_id": {"type": "string", "required": True},
+                    "asset_id": {"type": "string", "required": True},
+                    "field_type": {"type": "string", "required": True},
+                },
+            },
         }
-        
+
     def _register_budget_tools(self) -> Dict[str, Dict[str, Any]]:
         """Register budget management tools."""
         return {
@@ -608,6 +672,16 @@ class GoogleAdsTools:
                     "keywords": {"type": "array", "required": True, "description": "Array of negative keyword strings, e.g. ['free', 'cheap', 'demo']"},
                     "campaign_id": {"type": "string", "description": "For campaign-level negative keywords"},
                     "ad_group_id": {"type": "string", "description": "For ad group-level negative keywords"},
+                },
+            },
+            "remove_negative_keyword": {
+                "description": "Remove a negative keyword at campaign or ad group level. negative_keyword_id accepts bare criterion id (then requires campaign_id or ad_group_id) or composite '<container>~<crit>' form returned by add_negative_keywords.",
+                "handler": self.keyword_tools.remove_negative_keyword,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "negative_keyword_id": {"type": "string", "required": True, "description": "Bare criterion id or composite '<container>~<crit>'"},
+                    "campaign_id": {"type": "string", "description": "Required if negative_keyword_id is bare and target is campaign level"},
+                    "ad_group_id": {"type": "string", "description": "Required if negative_keyword_id is bare and target is ad group level"},
                 },
             },
             "list_keywords": {

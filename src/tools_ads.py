@@ -20,83 +20,127 @@ class AdTools:
         self,
         customer_id: str,
         ad_group_id: str,
-        headlines: List[str],
-        descriptions: List[str],
+        headlines: List[Any],
+        descriptions: List[Any],
         final_urls: List[str],
         path1: Optional[str] = None,
         path2: Optional[str] = None
     ) -> Dict[str, Any]:
-        """Create a responsive search ad."""
+        """Create a responsive search ad.
+
+        Headlines and descriptions accept two formats:
+        - Legacy: list of strings e.g. ["Headline 1", "Headline 2"]
+        - With pins: list of dicts e.g. [{"text": "Audit CHF 1'490.-", "pinned_field": "HEADLINE_2"}, ...]
+
+        Valid pinned_field values for headlines: HEADLINE_1, HEADLINE_2, HEADLINE_3
+        Valid pinned_field values for descriptions: DESCRIPTION_1, DESCRIPTION_2
+        Pass None / omit pinned_field to leave the asset unpinned.
+        """
         try:
             client = self.auth_manager.get_client(customer_id)
             ad_group_ad_service = client.get_service("AdGroupAdService")
-            
+
+            served_asset_field_type_enum = client.enums.ServedAssetFieldTypeEnum
+
+            def _normalize_asset(item, valid_pin_prefix):
+                """Return (text, pinned_field_or_None). Accepts str or dict."""
+                if isinstance(item, str):
+                    return item, None
+                if isinstance(item, dict):
+                    text = item.get("text")
+                    if text is None:
+                        raise ValueError("Asset dict missing 'text' key")
+                    pin = item.get("pinned_field")
+                    if pin in (None, "", "UNSPECIFIED"):
+                        return text, None
+                    pin_upper = str(pin).upper()
+                    if not pin_upper.startswith(valid_pin_prefix):
+                        raise ValueError(
+                            f"Invalid pinned_field '{pin}' for this slot; "
+                            f"expected prefix '{valid_pin_prefix}'"
+                        )
+                    return text, pin_upper
+                raise TypeError(f"Unsupported asset item type: {type(item).__name__}")
+
             # Create ad group ad operation
             ad_group_ad_operation = client.get_type("AdGroupAdOperation")
             ad_group_ad = ad_group_ad_operation.create
-            
+
             # Set ad group
             ad_group_ad.ad_group = client.get_service("AdGroupService").ad_group_path(
                 customer_id, ad_group_id
             )
-            
+
             # Set ad status
             ad_group_ad.status = client.enums.AdGroupAdStatusEnum.ENABLED
-            
+
             # Create the responsive search ad
             ad_group_ad.ad.type_ = client.enums.AdTypeEnum.RESPONSIVE_SEARCH_AD
             responsive_search_ad_info = ad_group_ad.ad.responsive_search_ad
-            
+
             # Add headlines (max 15, min 3)
-            headlines = headlines[:15]  # Limit to API max
-            for headline_text in headlines:
+            normalized_headlines = []
+            for item in headlines[:15]:
+                text, pin = _normalize_asset(item, "HEADLINE_")
                 headline_asset = client.get_type("AdTextAsset")
-                headline_asset.text = headline_text
+                headline_asset.text = text
+                if pin:
+                    headline_asset.pinned_field = getattr(served_asset_field_type_enum, pin)
                 responsive_search_ad_info.headlines.append(headline_asset)
-            
-            # Add descriptions (max 4, min 2) 
-            descriptions = descriptions[:4]  # Limit to API max
-            for description_text in descriptions:
+                normalized_headlines.append({"text": text, "pinned_field": pin})
+
+            # Add descriptions (max 4, min 2)
+            normalized_descriptions = []
+            for item in descriptions[:4]:
+                text, pin = _normalize_asset(item, "DESCRIPTION_")
                 description_asset = client.get_type("AdTextAsset")
-                description_asset.text = description_text
+                description_asset.text = text
+                if pin:
+                    description_asset.pinned_field = getattr(served_asset_field_type_enum, pin)
                 responsive_search_ad_info.descriptions.append(description_asset)
-            
+                normalized_descriptions.append({"text": text, "pinned_field": pin})
+
             # Set final URLs
             ad_group_ad.ad.final_urls.extend(final_urls)
-            
+
             # Set display paths if provided
             if path1:
                 responsive_search_ad_info.path1 = path1
             if path2:
                 responsive_search_ad_info.path2 = path2
-            
+
             # Create the ad
             response = ad_group_ad_service.mutate_ad_group_ads(
                 customer_id=customer_id,
                 operations=[ad_group_ad_operation],
             )
-            
+
             # Extract ad ID from response
             ad_resource_name = response.results[0].resource_name
             ad_id = ad_resource_name.split("/")[-1]
-            
+
+            pinned_count = sum(1 for h in normalized_headlines if h["pinned_field"]) + \
+                           sum(1 for d in normalized_descriptions if d["pinned_field"])
+
             logger.info(
-                f"Created responsive search ad",
+                "Created responsive search ad",
                 customer_id=customer_id,
                 ad_group_id=ad_group_id,
                 ad_id=ad_id,
-                headlines_count=len(headlines),
-                descriptions_count=len(descriptions)
+                headlines_count=len(normalized_headlines),
+                descriptions_count=len(normalized_descriptions),
+                pinned_count=pinned_count,
             )
-            
+
             return {
                 "success": True,
                 "ad_id": ad_id,
                 "ad_resource_name": ad_resource_name,
                 "ad_group_id": ad_group_id,
                 "ad_type": "RESPONSIVE_SEARCH_AD",
-                "headlines_count": len(headlines),
-                "descriptions_count": len(descriptions),
+                "headlines": normalized_headlines,
+                "descriptions": normalized_descriptions,
+                "pinned_count": pinned_count,
                 "final_urls": final_urls,
                 "status": "ENABLED"
             }
@@ -230,6 +274,9 @@ class AdTools:
                     ad_group_ad.ad.expanded_text_ad.headline_part1,
                     ad_group_ad.ad.expanded_text_ad.headline_part2,
                     ad_group_ad.ad.expanded_text_ad.description,
+                    ad_group_ad.ad_strength,
+                    ad_group_ad.policy_summary.approval_status,
+                    ad_group_ad.policy_summary.review_status,
                     ad_group.id,
                     ad_group.name,
                     campaign.id,
@@ -261,6 +308,9 @@ class AdTools:
                     "type": str(row.ad_group_ad.ad.type_.name),
                     "status": str(row.ad_group_ad.status.name),
                     "final_urls": list(row.ad_group_ad.ad.final_urls),
+                    "ad_strength": str(row.ad_group_ad.ad_strength.name),
+                    "approval_status": str(row.ad_group_ad.policy_summary.approval_status.name),
+                    "review_status": str(row.ad_group_ad.policy_summary.review_status.name),
                     "ad_group_id": str(row.ad_group.id),
                     "ad_group_name": str(row.ad_group.name),
                     "campaign_id": str(row.campaign.id),
@@ -349,18 +399,41 @@ class AdTools:
             # Update ad content if provided (for responsive search ads)
             if headlines or descriptions or final_urls or path1 is not None or path2 is not None:
                 if headlines:
+                    pin_enum = client.enums.ServedAssetFieldTypeEnum
+                    pin_h_map = {
+                        "HEADLINE_1": pin_enum.HEADLINE_1,
+                        "HEADLINE_2": pin_enum.HEADLINE_2,
+                        "HEADLINE_3": pin_enum.HEADLINE_3,
+                    }
                     ad_group_ad.ad.responsive_search_ad.headlines.clear()
                     for i, headline in enumerate(headlines[:15]):  # Max 15 headlines
                         headline_asset = client.get_type("AdTextAsset")
-                        headline_asset.text = headline
+                        if isinstance(headline, dict):
+                            headline_asset.text = headline.get("text", "")
+                            pf = headline.get("pinned_field")
+                            if pf and str(pf).upper() in pin_h_map:
+                                headline_asset.pinned_field = pin_h_map[str(pf).upper()]
+                        else:
+                            headline_asset.text = headline
                         ad_group_ad.ad.responsive_search_ad.headlines.append(headline_asset)
                     update_mask.paths.append("ad.responsive_search_ad.headlines")
-                
+
                 if descriptions:
+                    pin_enum = client.enums.ServedAssetFieldTypeEnum
+                    pin_d_map = {
+                        "DESCRIPTION_1": pin_enum.DESCRIPTION_1,
+                        "DESCRIPTION_2": pin_enum.DESCRIPTION_2,
+                    }
                     ad_group_ad.ad.responsive_search_ad.descriptions.clear()
                     for i, description in enumerate(descriptions[:4]):  # Max 4 descriptions
                         description_asset = client.get_type("AdTextAsset")
-                        description_asset.text = description
+                        if isinstance(description, dict):
+                            description_asset.text = description.get("text", "")
+                            pf = description.get("pinned_field")
+                            if pf and str(pf).upper() in pin_d_map:
+                                description_asset.pinned_field = pin_d_map[str(pf).upper()]
+                        else:
+                            description_asset.text = description
                         ad_group_ad.ad.responsive_search_ad.descriptions.append(description_asset)
                     update_mask.paths.append("ad.responsive_search_ad.descriptions")
                 
@@ -475,7 +548,7 @@ class AdTools:
                     ad_group_ad.ad.responsive_search_ad.path2,
                     ad_group_ad.ad.final_urls,
                     ad_group_ad.ad.type,
-                    ad_group_ad.strength,
+                    ad_group_ad.ad_strength,
                     ad_group.id,
                     ad_group.name,
                     campaign.id,
@@ -514,7 +587,7 @@ class AdTools:
                     "campaign_name": str(row.campaign.name),
                     
                     # Ad Strength & Quality
-                    "ad_strength": str(row.ad_group_ad.strength.name) if hasattr(row.ad_group_ad, 'strength') and row.ad_group_ad.strength else "NOT_AVAILABLE",
+                    "ad_strength": str(row.ad_group_ad.ad_strength.name) if hasattr(row.ad_group_ad, 'strength') and row.ad_group_ad.ad_strength else "NOT_AVAILABLE",
                     
                     # Review & Policy Status
                     "review_status": str(row.ad_group_ad.policy_summary.review_status.name) if hasattr(row.ad_group_ad, 'policy_summary') else "UNKNOWN",
@@ -636,7 +709,7 @@ class AdTools:
                     ad_group_ad.ad.name,
                     ad_group_ad.ad.responsive_search_ad.headlines,
                     ad_group_ad.ad.responsive_search_ad.descriptions,
-                    ad_group_ad.strength,
+                    ad_group_ad.ad_strength,
                     ad_group_ad.status,
                     metrics.clicks,
                     metrics.impressions,
@@ -674,7 +747,7 @@ class AdTools:
                 ad_data = {
                     "ad_id": str(row.ad_group_ad.ad.id),
                     "ad_name": str(row.ad_group_ad.ad.name) if row.ad_group_ad.ad.name else f"Ad {row.ad_group_ad.ad.id}",
-                    "ad_strength": str(row.ad_group_ad.strength.name) if hasattr(row.ad_group_ad, 'strength') and row.ad_group_ad.strength else "NOT_AVAILABLE",
+                    "ad_strength": str(row.ad_group_ad.ad_strength.name) if hasattr(row.ad_group_ad, 'strength') and row.ad_group_ad.ad_strength else "NOT_AVAILABLE",
                     "status": str(row.ad_group_ad.status.name),
                     
                     # Core Performance Metrics
@@ -741,7 +814,7 @@ class AdTools:
                 SELECT
                     ad_group_ad.ad.id,
                     ad_group_ad.ad.name,
-                    ad_group_ad.strength,
+                    ad_group_ad.ad_strength,
                     ad_group_ad.status,
                     metrics.clicks,
                     metrics.impressions,
@@ -784,7 +857,7 @@ class AdTools:
                     "rank": 0,  # Will be set after sorting
                     "ad_id": str(row.ad_group_ad.ad.id),
                     "ad_name": str(row.ad_group_ad.ad.name) if row.ad_group_ad.ad.name else f"Ad {row.ad_group_ad.ad.id}",
-                    "ad_strength": str(row.ad_group_ad.strength.name) if hasattr(row.ad_group_ad, 'strength') and row.ad_group_ad.strength else "NOT_AVAILABLE",
+                    "ad_strength": str(row.ad_group_ad.ad_strength.name) if hasattr(row.ad_group_ad, 'strength') and row.ad_group_ad.ad_strength else "NOT_AVAILABLE",
                     "status": str(row.ad_group_ad.status.name),
                     
                     # Performance metrics
@@ -878,7 +951,7 @@ class AdTools:
                 SELECT
                     ad_group_ad.ad.id,
                     ad_group_ad.ad.name,
-                    ad_group_ad.strength,
+                    ad_group_ad.ad_strength,
                     ad_group_ad.status,
                     metrics.clicks,
                     metrics.impressions,
@@ -934,7 +1007,7 @@ class AdTools:
                     "ad_name": str(row.ad_group_ad.ad.name) if row.ad_group_ad.ad.name else f"Ad {row.ad_group_ad.ad.id}",
                     "ad_group_name": str(row.ad_group.name),
                     "campaign_name": str(row.campaign.name),
-                    "strength": str(row.ad_group_ad.strength.name) if hasattr(row.ad_group_ad, 'strength') and row.ad_group_ad.strength else "NOT_AVAILABLE",
+                    "strength": str(row.ad_group_ad.ad_strength.name) if hasattr(row.ad_group_ad, 'strength') and row.ad_group_ad.ad_strength else "NOT_AVAILABLE",
                     "clicks": clicks,
                     "cost": cost,
                     "conversions": conversions,
@@ -1192,7 +1265,7 @@ class AdTools:
                 SELECT
                     ad_group_ad.ad.id,
                     ad_group_ad.ad.name,
-                    ad_group_ad.strength,
+                    ad_group_ad.ad_strength,
                     metrics.clicks,
                     metrics.impressions,
                     metrics.cost_micros,
@@ -1209,7 +1282,7 @@ class AdTools:
                 SELECT
                     ad_group_ad.ad.id,
                     ad_group_ad.ad.name,
-                    ad_group_ad.strength,
+                    ad_group_ad.ad_strength,
                     metrics.clicks,
                     metrics.impressions,
                     metrics.cost_micros,
@@ -1230,7 +1303,7 @@ class AdTools:
                 ad_id = str(row.ad_group_ad.ad.id)
                 current_data[ad_id] = {
                     "ad_name": str(row.ad_group_ad.ad.name) if row.ad_group_ad.ad.name else f"Ad {ad_id}",
-                    "strength": str(row.ad_group_ad.strength.name) if hasattr(row.ad_group_ad, 'strength') and row.ad_group_ad.strength else "NOT_AVAILABLE",
+                    "strength": str(row.ad_group_ad.ad_strength.name) if hasattr(row.ad_group_ad, 'strength') and row.ad_group_ad.ad_strength else "NOT_AVAILABLE",
                     "clicks": int(row.metrics.clicks) if hasattr(row, 'metrics') else 0,
                     "ctr": float(row.metrics.ctr) if hasattr(row, 'metrics') and row.metrics.ctr else 0,
                     "conversions": float(row.metrics.conversions) if hasattr(row, 'metrics') else 0,

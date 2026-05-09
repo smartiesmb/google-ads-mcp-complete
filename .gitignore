@@ -162,3 +162,15 @@ logs/
 # Local config
 .mcp.json
 mcp-config.json
+
+# Ad-hoc client scripts (never push to public fork — may contain secrets)
+/audit_*.py
+/reaudit_*.py
+/apply_*.py
+/fix_*.py
+/diag_*.py
+/check_*.py
+/cleanup_*.py
+/clear_*.py
+/map_*.py
+/add_audit_*.py

@@ -10,7 +10,7 @@ from pathlib import Path
 from mcp.server.models import InitializationOptions
 from mcp.server import Server, NotificationOptions
 from mcp.server.stdio import stdio_server
-from mcp.types import Tool, TextContent, ImageContent, EmbeddedResource
+from mcp.types import Tool, TextContent, ImageContent, EmbeddedResource, Resource
 from pydantic import BaseModel, Field
 import structlog
 
@@ -91,23 +91,52 @@ class GoogleAdsMCPServer:
                 return [TextContent(type="text", text=json.dumps(error_response, indent=2, default=str))]
                 
         @self.server.list_resources()
-        async def handle_list_resources() -> List[str]:
+        async def handle_list_resources() -> List[Resource]:
             """List available resources."""
-            resources = [
-                "googleads://accounts",
-                "googleads://documentation",
-                "googleads://error-codes",
-                "googleads://gaql-reference",
+            resources: List[Resource] = [
+                Resource(
+                    uri="googleads://accounts",
+                    name="All accessible accounts",
+                    description="Summary of every Google Ads account the auth token can access.",
+                    mimeType="application/json",
+                ),
+                Resource(
+                    uri="googleads://documentation",
+                    name="Google Ads MCP documentation",
+                    description="Overview of supported tools and usage patterns.",
+                    mimeType="text/markdown",
+                ),
+                Resource(
+                    uri="googleads://error-codes",
+                    name="Google Ads error codes reference",
+                    description="Reference of common Google Ads API error codes.",
+                    mimeType="text/markdown",
+                ),
+                Resource(
+                    uri="googleads://gaql-reference",
+                    name="GAQL reference",
+                    description="Google Ads Query Language cheatsheet and examples.",
+                    mimeType="text/markdown",
+                ),
             ]
-            
+
             # Add account-specific resources if authenticated
             try:
                 customers = self.auth_manager.get_accessible_customers()
                 for customer in customers:
-                    resources.append(f"googleads://customers/{customer['id']}")
-            except:
-                pass
-                
+                    cid = customer["id"]
+                    name = customer.get("name") or f"Customer {cid}"
+                    resources.append(
+                        Resource(
+                            uri=f"googleads://customers/{cid}",
+                            name=name,
+                            description=f"Account info for customer {cid}.",
+                            mimeType="application/json",
+                        )
+                    )
+            except Exception as e:
+                logger.warning(f"Could not enumerate customers for resources: {e}")
+
             return resources
             
         @self.server.read_resource()

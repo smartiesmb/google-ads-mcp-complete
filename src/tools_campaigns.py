@@ -179,7 +179,224 @@ class CampaignTools:
                 customer_id=customer_id,
                 operations=operations,
             )
-            
+
+    async def manage_geo_targeting(
+        self,
+        customer_id: str,
+        campaign_id: str,
+        include_locations: Optional[List[str]] = None,
+        exclude_locations: Optional[List[str]] = None,
+        radius_targets: Optional[List[Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
+        """Manage geographic targeting on an existing campaign.
+
+        Args:
+            customer_id: Account ID.
+            campaign_id: Target campaign.
+            include_locations: List of location names (e.g. "Auvergne-Rhône-Alpes, France",
+                "Lyon, France") OR raw geo_target_constant IDs as strings.
+            exclude_locations: Same format, marked as negative criteria.
+            radius_targets: List of dicts like
+                {"latitude": 46.2044, "longitude": 6.1432, "radius_km": 100}
+                OR {"address": "Genève, Switzerland", "radius_km": 100}.
+                For address-based, the function resolves to lat/lng via geo_target_constant when possible
+                — otherwise pass coordinates directly (recommended).
+
+        Returns: dict with counts of created criteria.
+        """
+        try:
+            client = self.auth_manager.get_client(customer_id)
+            campaign_criterion_service = client.get_service("CampaignCriterionService")
+            geo_service = client.get_service("GeoTargetConstantService")
+
+            operations = []
+            included_resolved = []
+            excluded_resolved = []
+            radius_resolved = []
+            not_found = []
+
+            def _resolve_location(name: str, country_code: str = "FR", locale: str = "fr"):
+                # If looks like a numeric ID, use it directly
+                stripped = name.strip()
+                if stripped.isdigit():
+                    return f"geoTargetConstants/{stripped}"
+                # Use GeoTargetConstantService.suggest_geo_target_constants — the official API
+                # for resolving location names into geo_target_constant resource names.
+                # We strip any country suffix the caller may have added (e.g. "Lyon, France" -> "Lyon")
+                # and rely on country_code to disambiguate.
+                clean = stripped
+                for suffix in (", France", ", FR", ", Switzerland", ", CH"):
+                    if clean.endswith(suffix):
+                        clean = clean[: -len(suffix)].strip()
+                        break
+                try:
+                    request = client.get_type("SuggestGeoTargetConstantsRequest")
+                    request.locale = locale
+                    request.country_code = country_code
+                    request.location_names.names.append(clean)
+                    response = geo_service.suggest_geo_target_constants(request=request)
+                    for s in response.geo_target_constant_suggestions:
+                        # Pick the first ENABLED suggestion that matches the country if specified
+                        if str(s.geo_target_constant.status.name) == "ENABLED":
+                            return s.geo_target_constant.resource_name
+                except Exception as exc:
+                    logger.warning(f"suggest_geo_target_constants failed for {name}: {exc}")
+                return None
+
+            if include_locations:
+                for loc in include_locations:
+                    rn = _resolve_location(loc)
+                    if rn is None:
+                        not_found.append(loc)
+                        continue
+                    op = client.get_type("CampaignCriterionOperation")
+                    crit = op.create
+                    crit.campaign = f"customers/{customer_id}/campaigns/{campaign_id}"
+                    crit.location.geo_target_constant = rn
+                    crit.negative = False
+                    operations.append(op)
+                    included_resolved.append({"input": loc, "resource_name": rn})
+
+            if exclude_locations:
+                for loc in exclude_locations:
+                    rn = _resolve_location(loc)
+                    if rn is None:
+                        not_found.append(loc)
+                        continue
+                    op = client.get_type("CampaignCriterionOperation")
+                    crit = op.create
+                    crit.campaign = f"customers/{customer_id}/campaigns/{campaign_id}"
+                    crit.location.geo_target_constant = rn
+                    crit.negative = True
+                    operations.append(op)
+                    excluded_resolved.append({"input": loc, "resource_name": rn})
+
+            if radius_targets:
+                for rt in radius_targets:
+                    op = client.get_type("CampaignCriterionOperation")
+                    crit = op.create
+                    crit.campaign = f"customers/{customer_id}/campaigns/{campaign_id}"
+                    crit.proximity.radius = float(rt.get("radius_km", 50))
+                    crit.proximity.radius_units = client.enums.ProximityRadiusUnitsEnum.KILOMETERS
+                    if "latitude" in rt and "longitude" in rt:
+                        crit.proximity.geo_point.latitude_in_micro_degrees = int(float(rt["latitude"]) * 1_000_000)
+                        crit.proximity.geo_point.longitude_in_micro_degrees = int(float(rt["longitude"]) * 1_000_000)
+                    if "address" in rt:
+                        # Attach a free-text address (Google attempts to resolve)
+                        if "country_code" in rt:
+                            crit.proximity.address.country_code = rt["country_code"]
+                        if "city" in rt:
+                            crit.proximity.address.city_name = rt["city"]
+                        if "postal_code" in rt:
+                            crit.proximity.address.postal_code = rt["postal_code"]
+                        if "street" in rt:
+                            crit.proximity.address.street_address = rt["street"]
+                    crit.negative = False
+                    operations.append(op)
+                    radius_resolved.append(rt)
+
+            applied = []
+            if operations:
+                response = campaign_criterion_service.mutate_campaign_criteria(
+                    customer_id=customer_id,
+                    operations=operations,
+                )
+                applied = [str(r.resource_name) for r in response.results]
+
+            return {
+                "success": True,
+                "campaign_id": campaign_id,
+                "included_count": len(included_resolved),
+                "excluded_count": len(excluded_resolved),
+                "radius_count": len(radius_resolved),
+                "not_found": not_found,
+                "included": included_resolved,
+                "excluded": excluded_resolved,
+                "radius_targets": radius_resolved,
+                "resource_names": applied,
+            }
+        except GoogleAdsException as e:
+            logger.error(f"Failed to manage geo targeting: {e}")
+            return self.error_handler.format_error_response(e)
+        except Exception as e:
+            logger.error(f"Unexpected error managing geo targeting: {e}")
+            return {"success": False, "error": str(e), "error_type": "UnexpectedError"}
+
+    async def manage_age_targeting(
+        self,
+        customer_id: str,
+        campaign_id: str,
+        exclude_ages: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """Exclude age ranges from a campaign (creates negative campaign criteria).
+
+        Args:
+            customer_id: Account ID.
+            campaign_id: Target campaign.
+            exclude_ages: Age ranges to exclude. Accepted values:
+                "18_24", "25_34", "35_44", "45_54", "55_64", "65_UP", "UNDETERMINED".
+                Default if None: ["18_24"] (typical B2B exclusion of non-decision-makers).
+                For strict B2B you may also pass "UNDETERMINED" — but be aware many
+                Google profiles are unclassified and excluding them can drop a lot of reach.
+
+        Returns: dict with applied exclusions.
+        """
+        try:
+            client = self.auth_manager.get_client(customer_id)
+            campaign_criterion_service = client.get_service("CampaignCriterionService")
+            age_enum = client.enums.AgeRangeTypeEnum
+
+            if not exclude_ages:
+                exclude_ages = ["18_24"]
+
+            mapping = {
+                "18_24": age_enum.AGE_RANGE_18_24,
+                "25_34": age_enum.AGE_RANGE_25_34,
+                "35_44": age_enum.AGE_RANGE_35_44,
+                "45_54": age_enum.AGE_RANGE_45_54,
+                "55_64": age_enum.AGE_RANGE_55_64,
+                "65_UP": age_enum.AGE_RANGE_65_UP,
+                "UNDETERMINED": age_enum.AGE_RANGE_UNDETERMINED,
+            }
+
+            operations = []
+            applied = []
+            unknown = []
+            for age in exclude_ages:
+                key = age.upper().replace("-", "_")
+                if key not in mapping:
+                    unknown.append(age)
+                    continue
+                op = client.get_type("CampaignCriterionOperation")
+                crit = op.create
+                crit.campaign = f"customers/{customer_id}/campaigns/{campaign_id}"
+                crit.age_range.type_ = mapping[key]
+                crit.negative = True
+                operations.append(op)
+                applied.append(key)
+
+            resource_names = []
+            if operations:
+                response = campaign_criterion_service.mutate_campaign_criteria(
+                    customer_id=customer_id,
+                    operations=operations,
+                )
+                resource_names = [str(r.resource_name) for r in response.results]
+
+            return {
+                "success": True,
+                "campaign_id": campaign_id,
+                "excluded_ages": applied,
+                "unknown_inputs": unknown,
+                "resource_names": resource_names,
+            }
+        except GoogleAdsException as e:
+            logger.error(f"Failed to manage age targeting: {e}")
+            return self.error_handler.format_error_response(e)
+        except Exception as e:
+            logger.error(f"Unexpected error managing age targeting: {e}")
+            return {"success": False, "error": str(e), "error_type": "UnexpectedError"}
+
     async def _add_language_targeting(
         self, client: GoogleAdsClient, customer_id: str, campaign_id: str, languages: List[str]
     ) -> None:
@@ -229,6 +446,11 @@ class CampaignTools:
         tracking_url_template: Optional[str] = None,
         final_url_suffix: Optional[str] = None,
         url_custom_parameters: Optional[Dict[str, str]] = None,
+        target_search_network: Optional[bool] = None,
+        target_partner_search_network: Optional[bool] = None,
+        target_content_network: Optional[bool] = None,
+        cpc_bid_ceiling_micros: Optional[int] = None,
+        geo_presence_only: Optional[bool] = None,
     ) -> Dict[str, Any]:
         """Update campaign settings.
 
@@ -239,7 +461,9 @@ class CampaignTools:
             status: New campaign status (ENABLED, PAUSED, REMOVED)
             start_date: New start date (YYYY-MM-DD format)
             end_date: New end date (YYYY-MM-DD format)
-            bidding_strategy: Portfolio bidding strategy resource name (e.g., customers/123/biddingStrategies/456)
+            bidding_strategy: Either a portfolio resource name (customers/.../biddingStrategies/...)
+                OR a standard strategy keyword: MANUAL_CPC, MAXIMIZE_CLICKS, MAXIMIZE_CONVERSIONS,
+                MAXIMIZE_CONVERSION_VALUE
             tracking_url_template: Campaign-level tracking URL template
                 (e.g., "{lpurl}?src=ads&utm_source=google&utm_medium=cpc&utm_campaign={campaignid}&utm_content={adgroupid}&utm_term={keyword}")
             final_url_suffix: Parameters appended to the final URL after landing (e.g., "src=ads&variant={_variant}")
@@ -279,8 +503,36 @@ class CampaignTools:
                 update_mask.append("end_date")
 
             if bidding_strategy is not None:
-                campaign.bidding_strategy = bidding_strategy
-                update_mask.append("bidding_strategy")
+                # Two modes:
+                # 1. Resource name (starts with "customers/") -> portfolio strategy
+                # 2. Type keyword (MANUAL_CPC, MAXIMIZE_CLICKS, etc.) -> standard strategy on campaign
+                if bidding_strategy.startswith("customers/"):
+                    campaign.bidding_strategy = bidding_strategy
+                    update_mask.append("bidding_strategy")
+                else:
+                    strategy_key = bidding_strategy.upper()
+                    if strategy_key == "MANUAL_CPC":
+                        campaign.manual_cpc.enhanced_cpc_enabled = False
+                        update_mask.append("manual_cpc.enhanced_cpc_enabled")
+                    elif strategy_key == "MAXIMIZE_CLICKS":
+                        if cpc_bid_ceiling_micros is not None:
+                            campaign.target_spend.cpc_bid_ceiling_micros = int(cpc_bid_ceiling_micros)
+                            update_mask.append("target_spend.cpc_bid_ceiling_micros")
+                        else:
+                            # Touch a scalar subfield to force the oneof to switch to target_spend
+                            campaign.target_spend.cpc_bid_ceiling_micros = 0
+                            update_mask.append("target_spend.cpc_bid_ceiling_micros")
+                    elif strategy_key == "MAXIMIZE_CONVERSIONS":
+                        campaign.maximize_conversions.target_cpa_micros = 0
+                        update_mask.append("maximize_conversions.target_cpa_micros")
+                    elif strategy_key == "MAXIMIZE_CONVERSION_VALUE":
+                        campaign.maximize_conversion_value.target_roas = 0
+                        update_mask.append("maximize_conversion_value.target_roas")
+                    else:
+                        return {
+                            "success": False,
+                            "error": f"Unsupported bidding_strategy '{bidding_strategy}'. Use a portfolio resource name (customers/.../biddingStrategies/...) or one of: MANUAL_CPC, MAXIMIZE_CLICKS, MAXIMIZE_CONVERSIONS, MAXIMIZE_CONVERSION_VALUE.",
+                        }
 
             if tracking_url_template is not None:
                 campaign.tracking_url_template = tracking_url_template
@@ -304,7 +556,39 @@ class CampaignTools:
                 del campaign.url_custom_parameters[:]
                 campaign.url_custom_parameters.extend(params_list)
                 update_mask.append("url_custom_parameters")
-                
+
+            if target_search_network is not None:
+                campaign.network_settings.target_search_network = target_search_network
+                update_mask.append("network_settings.target_search_network")
+
+            if target_partner_search_network is not None:
+                campaign.network_settings.target_partner_search_network = target_partner_search_network
+                update_mask.append("network_settings.target_partner_search_network")
+
+            if target_content_network is not None:
+                campaign.network_settings.target_content_network = target_content_network
+                update_mask.append("network_settings.target_content_network")
+
+            if cpc_bid_ceiling_micros is not None:
+                # For Maximize Clicks (TargetSpend) at campaign level
+                campaign.target_spend.cpc_bid_ceiling_micros = int(cpc_bid_ceiling_micros)
+                update_mask.append("target_spend.cpc_bid_ceiling_micros")
+
+            if geo_presence_only is not None:
+                # Set the campaign-level geo_target_type_setting.
+                # PRESENCE = users physically in the targeted location only (strict).
+                # PRESENCE_OR_INTEREST = also includes users searching about the location.
+                gt_enum = client.enums.PositiveGeoTargetTypeEnum
+                ng_enum = client.enums.NegativeGeoTargetTypeEnum
+                if geo_presence_only:
+                    campaign.geo_target_type_setting.positive_geo_target_type = gt_enum.PRESENCE
+                    campaign.geo_target_type_setting.negative_geo_target_type = ng_enum.PRESENCE
+                else:
+                    campaign.geo_target_type_setting.positive_geo_target_type = gt_enum.PRESENCE_OR_INTEREST
+                    campaign.geo_target_type_setting.negative_geo_target_type = ng_enum.PRESENCE
+                update_mask.append("geo_target_type_setting.positive_geo_target_type")
+                update_mask.append("geo_target_type_setting.negative_geo_target_type")
+
             # Set the update mask
             campaign_operation.update_mask.CopyFrom(
                 FieldMask(paths=update_mask)

@@ -30,7 +30,18 @@ class GeographyTools:
             client = self.auth_manager.get_client(customer_id)
             googleads_service = client.get_service("GoogleAdsService")
             
-            # Query geographic performance data
+            # Map tool aliases to geo_target_constant.target_type values (filtered Python-side)
+            # API v21: geographic_view.location_type enum is LOCATION_OF_PRESENCE / AREA_OF_INTEREST
+            # (not Country/Region). Country/Region/City breakdown comes from geo_target_constant.target_type.
+            type_aliases = {
+                "COUNTRY_AND_REGION": {"Country", "Region"},
+                "COUNTRY": {"Country"},
+                "REGION": {"Region"},
+                "CITY": {"City"},
+                "POSTAL_CODE": {"Postal Code"},
+            }
+            allowed_target_types = type_aliases.get(location_type.upper(), None)
+
             query = f"""
                 SELECT
                     geographic_view.country_criterion_id,
@@ -49,12 +60,11 @@ class GeographyTools:
                     campaign.id
                 FROM geographic_view
                 WHERE segments.date DURING {date_range}
-                AND geographic_view.location_type = '{location_type}'
             """
-            
+
             if campaign_id:
                 query += f" AND campaign.id = {campaign_id}"
-            
+
             query += " ORDER BY metrics.cost_micros DESC"
             
             response = googleads_service.search(
@@ -66,6 +76,10 @@ class GeographyTools:
             total_conversions = 0
             
             for row in response:
+                target_type = str(row.geo_target_constant.target_type) if row.geo_target_constant.target_type else ""
+                if allowed_target_types is not None and target_type not in allowed_target_types:
+                    continue
+
                 cost = row.metrics.cost_micros / 1_000_000
                 conversions = float(row.metrics.conversions)
                 conversion_value = float(row.metrics.conversions_value)

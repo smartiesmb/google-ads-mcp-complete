@@ -241,3 +241,137 @@ class AssetTools:
                 "error": str(e),
                 "error_type": "UnexpectedError"
             }
+
+    async def _remove_asset_link(
+        self,
+        customer_id: str,
+        service_name: str,
+        operation_type: str,
+        resource_name: str,
+        mutate_method: str
+    ) -> Dict[str, Any]:
+        """Internal helper: detach an asset link via a remove mutation."""
+        try:
+            client = self.auth_manager.get_client(customer_id)
+            service = client.get_service(service_name)
+            operation = client.get_type(operation_type)
+            operation.remove = resource_name
+
+            response = getattr(service, mutate_method)(
+                customer_id=customer_id,
+                operations=[operation],
+            )
+            removed_resource = response.results[0].resource_name
+
+            logger.info(
+                "Removed asset link",
+                customer_id=customer_id,
+                service=service_name,
+                resource_name=resource_name,
+            )
+
+            return {
+                "success": True,
+                "removed_resource_name": removed_resource,
+            }
+        except GoogleAdsException as e:
+            logger.error(f"Failed to remove asset link ({service_name}): {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "error_type": "GoogleAdsException",
+            }
+        except Exception as e:
+            logger.error(f"Unexpected error removing asset link ({service_name}): {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "error_type": "UnexpectedError",
+            }
+
+    async def remove_customer_asset(
+        self,
+        customer_id: str,
+        asset_id: str,
+        field_type: str
+    ) -> Dict[str, Any]:
+        """Detach an asset from the account level.
+
+        Args:
+            customer_id: The customer ID
+            asset_id: The asset ID to detach
+            field_type: The AssetFieldType (e.g. SITELINK, CALLOUT, DESCRIPTION,
+                HEADLINE, CALL, STRUCTURED_SNIPPET, etc.). Required because
+                CustomerAsset resource names embed the field type.
+        """
+        resource_name = (
+            f"customers/{customer_id}/customerAssets/"
+            f"{asset_id}~{field_type.upper()}"
+        )
+        return await self._remove_asset_link(
+            customer_id=customer_id,
+            service_name="CustomerAssetService",
+            operation_type="CustomerAssetOperation",
+            resource_name=resource_name,
+            mutate_method="mutate_customer_assets",
+        )
+
+    async def remove_campaign_asset(
+        self,
+        customer_id: str,
+        campaign_id: str,
+        asset_id: str,
+        field_type: str
+    ) -> Dict[str, Any]:
+        """Detach an asset from a campaign."""
+        resource_name = (
+            f"customers/{customer_id}/campaignAssets/"
+            f"{campaign_id}~{asset_id}~{field_type.upper()}"
+        )
+        return await self._remove_asset_link(
+            customer_id=customer_id,
+            service_name="CampaignAssetService",
+            operation_type="CampaignAssetOperation",
+            resource_name=resource_name,
+            mutate_method="mutate_campaign_assets",
+        )
+
+    async def remove_ad_group_asset(
+        self,
+        customer_id: str,
+        ad_group_id: str,
+        asset_id: str,
+        field_type: str
+    ) -> Dict[str, Any]:
+        """Detach an asset from an ad group."""
+        resource_name = (
+            f"customers/{customer_id}/adGroupAssets/"
+            f"{ad_group_id}~{asset_id}~{field_type.upper()}"
+        )
+        return await self._remove_asset_link(
+            customer_id=customer_id,
+            service_name="AdGroupAssetService",
+            operation_type="AdGroupAssetOperation",
+            resource_name=resource_name,
+            mutate_method="mutate_ad_group_assets",
+        )
+
+    async def remove_asset_group_asset(
+        self,
+        customer_id: str,
+        asset_group_id: str,
+        asset_id: str,
+        field_type: str
+    ) -> Dict[str, Any]:
+        """Detach an asset from a Performance Max asset group."""
+        resource_name = (
+            f"customers/{customer_id}/assetGroupAssets/"
+            f"{asset_group_id}~{asset_id}~{field_type.upper()}"
+        )
+        return await self._remove_asset_link(
+            customer_id=customer_id,
+            service_name="AssetGroupAssetService",
+            operation_type="AssetGroupAssetOperation",
+            resource_name=resource_name,
+            mutate_method="mutate_asset_group_assets",
+        )

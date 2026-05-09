@@ -266,7 +266,99 @@ class KeywordTools:
                 "error": str(e),
                 "error_type": "UnexpectedError"
             }
-    
+
+    async def remove_negative_keyword(
+        self,
+        customer_id: str,
+        negative_keyword_id: str,
+        campaign_id: Optional[str] = None,
+        ad_group_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Remove a negative keyword at either the campaign or ad group level.
+
+        `negative_keyword_id` can be either:
+          - the bare criterion id (e.g. "123456789") — requires campaign_id or ad_group_id
+          - the composite id returned by add_negative_keywords (e.g. "23754102127~123456789")
+            — in that case campaign_id / ad_group_id can be omitted.
+
+        Use campaign_id for campaign-level negatives, ad_group_id for ad-group-level.
+        """
+        try:
+            client = self.auth_manager.get_client(customer_id)
+
+            composite = None
+            if "~" in str(negative_keyword_id):
+                composite = negative_keyword_id
+                container_id, crit_id = composite.split("~", 1)
+            else:
+                crit_id = str(negative_keyword_id)
+                if campaign_id:
+                    container_id = str(campaign_id)
+                elif ad_group_id:
+                    container_id = str(ad_group_id)
+                else:
+                    return {
+                        "success": False,
+                        "error": "Must specify either campaign_id or ad_group_id when negative_keyword_id has no composite form",
+                        "error_type": "ValidationError"
+                    }
+
+            if campaign_id or (composite and ad_group_id is None):
+                # Campaign-level negative
+                service = client.get_service("CampaignCriterionService")
+                op = client.get_type("CampaignCriterionOperation")
+                op.remove = f"customers/{customer_id}/campaignCriteria/{container_id}~{crit_id}"
+                response = service.mutate_campaign_criteria(
+                    customer_id=customer_id,
+                    operations=[op],
+                )
+                level = "campaign"
+            elif ad_group_id:
+                # Ad group-level negative
+                service = client.get_service("AdGroupCriterionService")
+                op = client.get_type("AdGroupCriterionOperation")
+                op.remove = f"customers/{customer_id}/adGroupCriteria/{container_id}~{crit_id}"
+                response = service.mutate_ad_group_criteria(
+                    customer_id=customer_id,
+                    operations=[op],
+                )
+                level = "ad_group"
+            else:
+                return {
+                    "success": False,
+                    "error": "Could not determine level (campaign vs ad_group)",
+                    "error_type": "ValidationError"
+                }
+
+            removed_resource = response.results[0].resource_name
+
+            logger.info(
+                "Removed negative keyword",
+                customer_id=customer_id,
+                level=level,
+                resource_name=removed_resource,
+            )
+
+            return {
+                "success": True,
+                "removed_resource_name": removed_resource,
+                "level": level,
+            }
+        except GoogleAdsException as e:
+            logger.error(f"Failed to remove negative keyword: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "error_type": "GoogleAdsException"
+            }
+        except Exception as e:
+            logger.error(f"Unexpected error removing negative keyword: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "error_type": "UnexpectedError"
+            }
+
     async def list_keywords(
         self,
         customer_id: str,
@@ -306,6 +398,8 @@ class KeywordTools:
                         ad_group_criterion.keyword.text,
                         ad_group_criterion.keyword.match_type,
                         ad_group_criterion.status,
+                        ad_group_criterion.system_serving_status,
+                        ad_group_criterion.approval_status,
                         ad_group_criterion.cpc_bid_micros,
                         ad_group_criterion.negative,
                         ad_group.id,
@@ -329,6 +423,8 @@ class KeywordTools:
                         ad_group_criterion.keyword.text,
                         ad_group_criterion.keyword.match_type,
                         ad_group_criterion.status,
+                        ad_group_criterion.system_serving_status,
+                        ad_group_criterion.approval_status,
                         ad_group_criterion.cpc_bid_micros,
                         ad_group_criterion.negative,
                         ad_group.id,
@@ -361,6 +457,8 @@ class KeywordTools:
                     "text": str(row.ad_group_criterion.keyword.text),
                     "match_type": str(row.ad_group_criterion.keyword.match_type.name),
                     "status": str(row.ad_group_criterion.status.name),
+                    "system_serving_status": str(row.ad_group_criterion.system_serving_status.name),
+                    "approval_status": str(row.ad_group_criterion.approval_status.name),
                     "negative": row.ad_group_criterion.negative,
                     "cpc_bid": micros_to_currency(row.ad_group_criterion.cpc_bid_micros),
                     "ad_group_id": str(row.ad_group.id),
