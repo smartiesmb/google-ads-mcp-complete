@@ -1,348 +1,273 @@
-# Complete Google Ads API v21 MCP Server
+# Google Ads MCP — Complete Server
 
-**🎉 FULLY FUNCTIONAL** - 40+ tools implemented with complete automation capabilities!
+A comprehensive [Model Context Protocol](https://modelcontextprotocol.io) server exposing the full Google Ads API surface to AI assistants (Claude, Cursor, etc.) through ~95 typed tools.
 
-A comprehensive Model Context Protocol (MCP) server that provides full access to Google Ads API v21 functionality. This server enables AI assistants to create, optimize, and manage Google Ads campaigns with complete automation through natural language commands.
+This is a **fork** of [`grantweston/google-ads-mcp-complete`](https://github.com/grantweston/google-ads-mcp-complete) maintained at [`smartiesmb/google-ads-mcp-complete`](https://github.com/smartiesmb/google-ads-mcp-complete) with significant additions: Google Ads API **v23** compatibility, conversion-goals management, keyword planner integration, asset link removal, geographic / age targeting management, and many production-grade fixes.
 
-## 🚀 What Makes This Different
+---
 
-**This is a COMPLETE implementation!** Unlike other repositories that only provide interfaces without implementations, every single tool actually works with full Google Ads API v21 compatibility:
+## What's New In This Fork
 
-✅ **40+ Tools Implemented** - Complete campaign automation  
-✅ **100% API v21 Compatible** - All latest features and fixes  
-✅ **Production Tested** - Successfully manages real campaigns at scale  
-✅ **Advanced Automation** - Full campaign lifecycle from creation to optimization  
-✅ **Comprehensive Error Handling** - Robust retry logic and detailed errors  
-✅ **Complete Documentation** - Examples and syntax guides
+| Area | Additions |
+|------|-----------|
+| **API version** | Migrated to Google Ads API **v23** (Asset API for extensions, modern resource patterns) |
+| **Conversions** | Full conversion-action lifecycle + customer/campaign **conversion-goals** management |
+| **Keyword Planner** | `generate_keyword_ideas`, `generate_keyword_historical_metrics` |
+| **Negative keywords** | Now includes campaign-level negatives in `list_keywords`; smart match-type parsing from `"phrase"` and `[exact]` wrapping |
+| **Asset removal** | `remove_customer_asset`, `remove_campaign_asset`, `remove_ad_group_asset`, `remove_asset_group_asset` |
+| **Targeting management** | `manage_age_targeting`, `manage_geo_targeting`, `optimize_geographic_targeting` |
+| **Tracking URLs** | `tracking_url_template`, `final_url_suffix`, `url_custom_parameters` exposed on campaigns and ad groups |
+| **Auth** | MCC `login_customer_id` is now always sent when accessing client accounts |
+| **Server** | Typed `Resource` objects (uri / name / description / mimeType) with per-customer entries |
 
-## 🛠️ Complete Tool Set (45+ Tools)
+---
 
-### 🏢 Account Management (3 Tools)
-- **`list_accounts`** - List all accessible Google Ads accounts
-- **`get_account_info`** - Detailed account information with optimization scores  
-- **`get_account_hierarchy`** - Complete account structure and relationships
+## Tool Catalog (~95 tools)
 
-### 🎯 Campaign Management (10 Tools)
-- **`create_campaign`** - Create campaigns with advanced targeting and bidding
-- **`update_campaign`** - Update settings including portfolio bidding strategy assignment
-- **`pause_campaign`** / **`resume_campaign`** - Campaign lifecycle management
-- **`list_campaigns`** - Filter and search campaigns with performance data
-- **`get_campaign`** - Comprehensive campaign details and metrics
-- **`delete_campaign`** - Safe campaign removal
-- **`copy_campaign`** - Duplicate campaigns with new budgets
-- **`create_ad_schedule`** - Advanced dayparting with bid adjustments
-- **`get_campaign_overview`** - Complete dashboard showing campaign structure, keywords, extensions, optimization score
+### Account & Hierarchy
+`list_accounts` · `get_account_info` · `get_account_hierarchy`
 
-### 📁 Ad Group Management (3 Tools)
-- **`create_ad_group`** - Create ad groups with custom bidding
-- **`update_ad_group`** - Modify ad group settings and bids
-- **`list_ad_groups`** - Browse ad groups with filters
+### Campaign Management
+`create_campaign` · `update_campaign` · `pause_campaign` · `resume_campaign` · `delete_campaign` · `list_campaigns` · `get_campaign` · `get_campaign_overview` · `get_campaign_performance` · `copy_campaign` · `create_ad_schedule`
 
-### 📝 Advanced Ad Management (10 Tools)  
-- **`create_responsive_search_ad`** - Modern responsive search ads
-- **`create_expanded_text_ad`** - Traditional expanded text ads
-- **`list_ads`** / **`update_ad`** / **`pause_ad`** / **`enable_ad`** / **`delete_ad`** - Complete ad lifecycle
-- **`compare_ad_performance`** - Side-by-side ad performance analysis
-- **`get_ad_group_performance_ranking`** - Rank ads by efficiency metrics
-- **`identify_optimization_opportunities`** - AI-powered optimization recommendations
-- **`calculate_roas_by_ad`** - Return on Ad Spend analysis with profitability insights
+### Ad Group Management
+`create_ad_group` · `update_ad_group` · `list_ad_groups` · `get_ad_group_performance` · `get_ad_group_performance_ranking`
 
-### 🧠 Keyword Intelligence (8 Tools)
-- **`add_keywords`** - Add keywords with custom match types and bids
-- **`add_negative_keywords`** - Campaign/ad group negative keywords with smart protobuf handling
-- **`list_keywords`** - Keywords with quality scores and performance data
-- **`update_keyword_bid`** / **`delete_keyword`** / **`pause_keyword`** / **`enable_keyword`** - Complete keyword lifecycle
-- **`get_keyword_performance`** - Quality scores and optimization insights
+### Ad Management
+`create_responsive_search_ad` · `create_expanded_text_ad` · `list_ads` · `update_ad` · `pause_ad` · `enable_ad` · `delete_ad` · `compare_ad_performance` · `analyze_ad_strength_trends` · `calculate_roas_by_ad`
 
-### 🎨 Modern Extensions (6 Tools)
-- **`create_sitelink_extensions`** - Additional links with descriptions (API v21 AssetService)
-- **`create_callout_extensions`** - Compelling callout text (API v21 compatible)
-- **`create_structured_snippet_extensions`** - Service showcases with header validation
-- **`create_call_extensions`** - Phone extensions with scheduling
-- **`list_extensions`** / **`delete_extension`** - Extension management
+### Keyword Management
+`add_keywords` (with quote/bracket match-type parsing) · `list_keywords` (incl. campaign-level negatives) · `update_keyword_bid` · `pause_keyword` · `enable_keyword` · `delete_keyword` · `add_negative_keywords` · `remove_negative_keyword` · `auto_suggest_negative_keywords` · `get_keyword_performance`
 
-### 💰 Portfolio Bidding (5 Tools)
-- **`create_portfolio_bidding_strategy`** - Target CPA, ROAS, Impression Share strategies
-- **`list_bidding_strategies`** - Portfolio strategies with campaign assignments
-- **`set_bid_adjustments`** - Device, location, demographic bid modifications
-- **`get_bid_adjustment_performance`** - Bid adjustment ROI analysis
-- **`get_device_performance`** - Mobile/desktop/tablet performance breakdown
+### Keyword Planner
+`generate_keyword_ideas` · `generate_keyword_historical_metrics`
 
-## 🚀 Key Capabilities
+### Budgets
+`create_budget` · `update_budget` · `list_budgets`
 
-### 🎯 Complete Campaign Automation
-**Create fully optimized campaigns from scratch:**
-- **Smart Bidding**: Target Impression Share, Target CPA, Target ROAS portfolio strategies
-- **Advanced Scheduling**: Business hours targeting, dayparting with bid adjustments  
-- **Extension Automation**: Sitelinks, callouts, structured snippets with validation
-- **Audience Intelligence**: Remarketing lists, user interests, smart audience detection
-- **Negative Keyword Intelligence**: Automated wasteful term detection and suggestions
+### Bidding
+`create_portfolio_bidding_strategy` · `list_bidding_strategies` · `remove_bidding_strategy` · `set_bid_adjustments` · `get_bid_adjustment_performance`
 
-### 🧠 AI-Powered Optimization
-- **Campaign Health Scoring**: 100-point optimization assessment with detailed breakdown
-- **Performance Analysis**: ROAS calculation, efficiency scoring, trend analysis over time
-- **Automated Recommendations**: Bid adjustments, keyword suggestions, audience optimizations
-- **Search Term Intelligence**: Convert wasteful search queries into negative keywords automatically
-- **Geographic Optimization**: Location-based bid adjustments and targeting recommendations
+### Extensions (Asset API, v23+)
+`create_sitelink_extensions` · `create_callout_extensions` · `create_structured_snippet_extensions` · `create_call_extensions` · `list_extensions` · `delete_extension`
 
-### 🔧 Advanced Technical Features
-- **Google Ads API v21 Full Compatibility**: Modern AssetService, eliminates deprecated APIs
-- **Smart Error Handling**: Exponential backoff, partial failure recovery, detailed error documentation
-- **Intelligent Field Validation**: Automatic protobuf object creation, field validation, enum handling
-- **Authentication Flexibility**: OAuth2, Service Account, token refresh, multi-account manager support
-- **Resource Management**: Automatic resource name construction, cross-resource relationship handling
+### Assets
+`upload_image_asset` · `upload_text_asset` · `list_assets` · `remove_customer_asset` · `remove_campaign_asset` · `remove_ad_group_asset` · `remove_asset_group_asset`
 
-## 📋 Complete Installation & Setup
+### Audiences
+`list_audiences` · `create_custom_audience` · `add_audience_targeting` · `get_audience_performance`
+
+### Conversions
+`create_conversion_action` · `update_conversion_action` · `remove_conversion_action` · `get_conversion_action` · `list_conversion_actions` · `upload_click_conversion` · `upload_call_conversion`
+
+### Conversion Goals (customer & campaign level)
+`list_customer_conversion_goals` · `update_customer_conversion_goal` · `list_campaign_conversion_goals` · `update_campaign_conversion_goal`
+
+### Targeting (Geo, Demographics, Devices)
+`get_location_performance` · `manage_geo_targeting` · `optimize_geographic_targeting` · `manage_age_targeting` · `get_device_performance`
+
+### Reporting & Insights
+`get_search_terms_report` · `get_search_terms_insights` · `get_change_history` · `identify_optimization_opportunities` · `get_recommendations` · `apply_recommendation` · `run_gaql_query` (raw GAQL escape hatch)
+
+---
+
+## Installation
 
 ### Prerequisites
 - Python 3.10+
-- Google Ads account with API access
-- Developer token (Basic or Standard access)
+- A Google Ads account with API access
+- A developer token (Basic or Standard access)
 
-### Installation
+### Clone & install
+
 ```bash
-# Clone the repository
-git clone https://github.com/grantweston/google-ads-mcp-complete.git
+git clone https://github.com/smartiesmb/google-ads-mcp-complete.git
 cd google-ads-mcp-complete
 
-# Create virtual environment
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+source venv/bin/activate          # Windows: venv\Scripts\activate
 
-# Install dependencies
 pip install -e .
 ```
 
-### Google Ads API Setup
+### Get your credentials
 
-1. **Get Developer Token**:
-   - Sign in to Google Ads account
-   - Go to Tools & Settings → API Center
-   - Apply for developer token (Basic Access recommended)
+1. **Developer token**: Google Ads → Tools & Settings → API Center → request a token (Basic Access is enough).
+2. **OAuth 2.0 client**: [Google Cloud Console](https://console.cloud.google.com/) → enable Google Ads API → create an OAuth 2.0 Client ID (Desktop app type).
+3. **Refresh token**: run any standard OAuth flow against the `https://www.googleapis.com/auth/adwords` scope and store the resulting refresh token.
+4. **MCC `login_customer_id`** *(recommended)*: the 10-digit ID of your Manager account. The fork always sends this header when calling client accounts.
 
-2. **Create OAuth2 Credentials**:
-   - Visit [Google Cloud Console](https://console.cloud.google.com/)
-   - Create/select project → Enable Google Ads API
-   - Create OAuth 2.0 Client ID (Desktop Application)
-   - Download client credentials
+---
 
-### Configuration
+## Configuration
 
-Create `config.json` in project root:
+You can configure the server in either of two ways.
+
+### Option 1 — `config.json` at repo root
+
 ```json
 {
   "client_id": "YOUR_OAUTH_CLIENT_ID",
-  "client_secret": "YOUR_OAUTH_CLIENT_SECRET", 
+  "client_secret": "YOUR_OAUTH_CLIENT_SECRET",
   "refresh_token": "YOUR_REFRESH_TOKEN",
   "developer_token": "YOUR_DEVELOPER_TOKEN",
-  "login_customer_id": "YOUR_MANAGER_ACCOUNT_ID",
+  "login_customer_id": "1234567890",
   "use_proto_plus": true
 }
 ```
 
-### MCP Integration
+### Option 2 — Environment variables (recommended for MCP)
 
-Add to Claude Desktop config (`~/.claude/mcp.json`):
+```
+GOOGLE_ADS_DEVELOPER_TOKEN
+GOOGLE_ADS_CLIENT_ID
+GOOGLE_ADS_CLIENT_SECRET
+GOOGLE_ADS_REFRESH_TOKEN
+GOOGLE_ADS_LOGIN_CUSTOMER_ID
+```
+
+---
+
+## MCP Integration
+
+### Claude Desktop / Claude Code
+
+Add to `~/.claude/mcp.json` (macOS/Linux) or `%USERPROFILE%\.claude\mcp.json` (Windows):
+
 ```json
 {
   "mcpServers": {
     "google-ads": {
-      "command": "/path/to/venv/bin/python",
-      "args": ["/path/to/google-ads-mcp-complete/run_server.py"],
+      "command": "/absolute/path/to/venv/bin/python",
+      "args": ["/absolute/path/to/google-ads-mcp-complete/run_server.py"],
       "env": {
-        "GOOGLE_ADS_DEVELOPER_TOKEN": "YOUR_TOKEN",
-        "GOOGLE_ADS_CLIENT_ID": "YOUR_CLIENT_ID",
-        "GOOGLE_ADS_CLIENT_SECRET": "YOUR_SECRET",
-        "GOOGLE_ADS_REFRESH_TOKEN": "YOUR_REFRESH_TOKEN",
-        "GOOGLE_ADS_LOGIN_CUSTOMER_ID": "YOUR_MANAGER_ID"
+        "GOOGLE_ADS_DEVELOPER_TOKEN": "...",
+        "GOOGLE_ADS_CLIENT_ID": "...",
+        "GOOGLE_ADS_CLIENT_SECRET": "...",
+        "GOOGLE_ADS_REFRESH_TOKEN": "...",
+        "GOOGLE_ADS_LOGIN_CUSTOMER_ID": "1234567890"
       }
     }
   }
 }
 ```
 
-## 💡 Advanced Use Cases
+Restart your client. The server should advertise ~95 tools and a handful of `googleads://` resources (one per accessible customer).
 
-### 🎯 Complete Campaign Automation
-```
-"Create a comprehensive search campaign for 'AI productivity tools' with:
-- $100 daily budget targeting US business professionals
-- Target Impression Share bidding for positions 3-4
-- Business hours scheduling with +20% mobile bid adjustment  
-- Complete extension suite (sitelinks, callouts, structured snippets)
-- Negative keyword protection against irrelevant traffic
-- Remarketing audience targeting in observation mode"
-```
+### Resources exposed
 
-### 📊 Performance Optimization  
-```
-"Analyze all campaigns and:
-- Generate negative keyword suggestions from wasteful search terms
-- Optimize geographic targeting based on conversion data
-- Create portfolio bidding strategy for underperforming campaigns
-- Identify top-performing ads for scaling
-- Calculate ROAS by ad with profitability recommendations"
-```
-
-### 🎨 Extension Management
-```
-"Add comprehensive extensions to all search campaigns:
-- Sitelinks for Features, Pricing, Demo, Support pages
-- Callouts highlighting key benefits and trust signals
-- Structured snippets showcasing service categories  
-- Call extensions with business hours scheduling"
-```
-
-### 📈 Real-World Results
-**Proven Production Performance:**
-- ✅ **84+ extensions per campaign** (sitelinks, callouts, structured snippets)
-- ✅ **100/100 optimization scores** with complete automation
-- ✅ **Portfolio bidding strategies** assigned across multiple campaigns
-- ✅ **Advanced scheduling** with business hours and bid adjustments
-- ✅ **Smart audience targeting** with remarketing and user interests
-
-## 🔧 Google Ads API v21 Compatibility
-
-This MCP server is fully updated for Google Ads API v21 with modern best practices:
-
-### ✅ API v21 Updates Applied
-- **Modern Extensions**: Migrated from deprecated ExtensionFeedItemService to AssetService + CampaignAssetService
-- **Bidding Strategies**: Fixed device targeting, added TARGET_IMPRESSION_SHARE with location_fraction_micros
-- **Field Compatibility**: Removed deprecated `metrics.conversion_rate`, fixed protobuf object creation
-- **Error Handling**: Updated for v21 error codes and response formats
-- **Resource Management**: Modern resource name construction and validation
-
-### 🔐 Authentication & Security
-- **Multiple Auth Methods**: OAuth2, Service Account, environment variables
-- **Token Auto-Refresh**: Automatic OAuth token renewal with error recovery
-- **Credential Caching**: Secure credential storage with TTL expiration
-- **Multi-Account Support**: Manager account hierarchy handling
-- **Rate Limit Management**: Intelligent request throttling and queue management
-
-## 🧪 Development & Testing
-
-### Running the Server
-```bash
-# Development mode with debug logging
-export LOG_LEVEL=DEBUG
-python run_server.py
-
-# Production mode
-python run_server.py
-```
-
-### Testing Tools
-```bash
-# Run comprehensive test suite
-pytest tests/
-
-# Test specific tool functionality
-python -c "
-from src.tools_complete import GoogleAdsTools
-from src.auth import GoogleAdsAuthManager  
-from src.error_handler import ErrorHandler
-
-auth = GoogleAdsAuthManager()
-tools = GoogleAdsTools(auth, ErrorHandler()) 
-print(f'Available tools: {len(tools.get_all_tools())}')
-"
-```
-
-## Security Notes
-
-- Never commit credentials to version control
-- Use service accounts for production environments
-- Enable 2FA on Google Ads accounts
-- Regularly rotate refresh tokens
-- Monitor API usage and set alerts
-
-## 🏗️ Architecture & Technical Excellence
-
-### Modular Design
-```
-src/
-├── server.py              # MCP server core with resource handlers
-├── auth.py                # OAuth2 & Service Account authentication  
-├── error_handler.py       # Retry logic & Google Ads error processing
-├── tools_complete.py      # Central tool registry and orchestration
-├── tools_campaigns.py     # Campaign CRUD, scheduling, overview dashboard
-├── tools_bidding.py       # Portfolio strategies, bid adjustments, device targeting
-├── tools_keywords.py      # Keyword management, negative keyword intelligence
-├── tools_extensions.py    # Modern AssetService-based extensions
-├── tools_ads.py          # Ad creation, optimization analysis, ROAS calculation
-├── tools_audiences.py     # Audience targeting with smart ID detection
-├── tools_assets.py       # Image/text asset management
-├── tools_budgets.py      # Shared budget management
-├── tools_geography.py    # Location targeting and geo-optimization
-├── tools_reporting.py    # Performance analytics and custom reporting
-└── utils.py              # Currency conversion, date parsing, formatting
-```
-
-### Enterprise-Grade Features
-- **Smart Type Detection**: Automatically detects audience types, validates enum values  
-- **Fallback Handling**: Graceful degradation when API queries fail
-- **Resource Name Management**: Automatic construction of Google Ads resource names
-- **Protobuf Safety**: Proper Google Ads protobuf object creation and validation
-- **Performance Optimization**: Caching, connection pooling, efficient batch operations
-
-## 📊 Production Performance
-
-**Real Campaign Management at Scale:**
-- ✅ **45+ tools** covering complete Google Ads API v21 functionality
-- ✅ **100% success rate** in campaign creation and optimization
-- ✅ **84+ extensions per campaign** automatically created and managed
-- ✅ **Complete automation** from campaign creation to performance optimization
-- ✅ **Enterprise reliability** with comprehensive error handling and retry logic
-
-## License
-
-MIT License - See LICENSE file for details
-
-## 🤝 Contributing
-
-### Development Workflow
-1. Fork the repository
-2. Create feature branch (`git checkout -b feature/amazing-feature`)
-3. Add comprehensive tests for new functionality
-4. Ensure Google Ads API v21 compatibility
-5. Submit pull request with detailed description
-
-### Code Standards
-- **Type Hints**: Full type annotation coverage
-- **Error Handling**: Comprehensive exception handling with structured logging
-- **Documentation**: Detailed docstrings for all public methods
-- **Testing**: Unit tests for all tool functionality
-- **API Compatibility**: Ensure v21 field compatibility and proper protobuf handling
-
-### Adding Custom Tools
-1. Create tool method in appropriate module (e.g., `tools_campaigns.py`)
-2. Add tool registration in `tools_complete.py` 
-3. Add comprehensive error handling and validation
-4. Update documentation and syntax examples
-
-## 🆘 Support & Troubleshooting
-
-### Common Issues
-- **Authentication**: Check developer token, client credentials, and account access levels
-- **Rate Limits**: Monitor API usage, implement request throttling
-- **Field Errors**: Verify Google Ads API v21 field compatibility and enum values
-- **Resource Names**: Ensure proper resource name format construction
-- **Protobuf Errors**: Check object creation patterns and required field validation
-
-### Error Handling Features
-- **Intelligent Error Recovery**: Exponential backoff with smart retry logic
-- **Detailed Error Documentation**: Links to Google Ads API error guides with solutions
-- **Partial Failure Handling**: Continue processing when some operations fail
-- **Smart Retry Logic**: Distinguishes between retryable and permanent errors
-
-### Getting Help
-1. Check error messages for documentation links and suggestions
-2. Review [Google Ads API Documentation](https://developers.google.com/google-ads/api/docs/start)
-3. Open GitHub issue with detailed error information and logs
-4. Check server logs for detailed debugging information with correlation IDs
+- `googleads://accounts` — every account the auth token can access
+- `googleads://customers/{id}` — per-customer summary
+- `googleads://documentation` — usage cheatsheet
+- `googleads://gaql-reference` — GAQL syntax reference
+- `googleads://error-codes` — common API error codes
 
 ---
 
-**🚀 Production-Ready** | **🔧 Google Ads API v21 Compatible** | **🤖 Complete Campaign Automation**
+## Usage Examples (natural-language prompts)
 
-Transform your Google Ads management with the most comprehensive MCP server available - from campaign creation to advanced optimization, all through natural language AI commands.
+> *"List all my Google Ads accounts and show me which ones are MCC managers."*
+
+> *"Create a Search campaign in account 1234567890 named 'Brand FR-EST 2026Q2', daily budget €50, MAXIMIZE_CLICKS, target Switzerland (French + German), with a French RSA pointing to https://example.ch."*
+
+> *"For campaign X, generate 30 keyword ideas around 'machine à café professionnelle', return historical metrics, and add the top 10 as exact-match keywords with a CPC max of €1.20."*
+
+> *"Audit account Y: list all conversion actions, show which ones are tied to active customer-level conversion goals, and pause any conversion action that hasn't fired in 90 days."*
+
+> *"On campaign Z, exclude users aged 18–24 and apply a +25% bid modifier to mobile devices."*
+
+> *"Find the top 20 search terms with spend > €5 and zero conversions across all Search campaigns from the last 30 days, and add them as campaign-level negative keywords."*
+
+---
+
+## Architecture
+
+```
+src/
+├── server.py              MCP server, resource handlers, tool dispatcher
+├── auth.py                OAuth2 / refresh-token / MCC login_customer_id
+├── error_handler.py       Retry policy, GoogleAdsException unwrapping
+├── tools.py               Base tool class, account & basic ops
+├── tools_complete.py      Central registry — wires every tool into MCP
+├── tools_campaigns.py     Campaigns + scheduling + tracking URLs
+├── tools_ad_groups.py     Ad groups + tracking URLs
+├── tools_ads.py           RSA / ETA + performance analytics
+├── tools_keywords.py      Keywords, negatives, Keyword Planner
+├── tools_extensions.py    Asset API extensions (v23+)
+├── tools_assets.py        Image/text assets + asset link removal
+├── tools_audiences.py     Custom audiences, targeting, performance
+├── tools_bidding.py       Portfolio strategies + bid adjustments
+├── tools_budgets.py       Shared budgets
+├── tools_conversions.py   Conversion actions + goals + uploads
+├── tools_geography.py     Location targeting + geo optimization + age
+├── tools_reporting.py     Search terms, change history, GAQL
+└── utils.py               Currency, date, micros conversion
+```
+
+---
+
+## Development
+
+### Run locally
+
+```bash
+export LOG_LEVEL=DEBUG
+python run_server.py
+```
+
+The server speaks MCP over stdio. To smoke-test outside an MCP client, you can import the registry directly:
+
+```python
+from src.tools_complete import GoogleAdsTools
+from src.auth import GoogleAdsAuthManager
+from src.error_handler import ErrorHandler
+
+tools = GoogleAdsTools(GoogleAdsAuthManager(), ErrorHandler())
+print(len(tools.get_all_tools()), "tools registered")
+```
+
+### Branching
+
+- `main` — stable, tracks the original upstream
+- `feat/conversion-goals-and-fixes` — current development branch with all fork additions
+
+### Contributing back
+
+PRs welcome. Please:
+- keep changes API-version-aware (v23 fields, modern Asset API)
+- add or update GAQL queries when the underlying field set changes
+- avoid committing client-specific scripts (this fork's `.gitignore` excludes `audit_*.py`, `fix_*.py`, `diag_*.py`, etc.)
+
+---
+
+## Security
+
+- **Never** commit `config.json`, `google-ads.yaml`, or any file containing a refresh token / developer token. The `.gitignore` covers the standard names.
+- Prefer environment variables in MCP configs over on-disk JSON.
+- Rotate refresh tokens periodically; revoke OAuth grants for any compromised key.
+- The MCC `login_customer_id` is always sent — make sure your MCC's hierarchy reflects only the accounts you intend the AI to touch.
+
+---
+
+## Troubleshooting
+
+| Symptom | Likely cause |
+|---------|--------------|
+| `USER_PERMISSION_DENIED` on a client account | Missing or wrong `login_customer_id` (must be the MCC, not the client) |
+| `INVALID_FIELD_NAME` on metrics | Calling fields removed in v23 (e.g. `metrics.conversion_rate` → compute manually) |
+| Extensions silently not appearing | You're hitting the legacy `ExtensionFeedItemService`. This fork uses the Asset API exclusively |
+| `INVALID_CUSTOMER_ID` | Customer ID must be a 10-digit string with no dashes |
+| `AUTHENTICATION_ERROR` | Refresh token expired or scope insufficient — re-run OAuth with `https://www.googleapis.com/auth/adwords` |
+
+For raw debugging, the `run_gaql_query` tool gives you a direct GAQL escape hatch.
+
+---
+
+## License
+
+MIT — see [LICENSE](LICENSE).
+
+## Credits
+
+- Original work: [grantweston/google-ads-mcp-complete](https://github.com/grantweston/google-ads-mcp-complete)
+- This fork: [smartiesmb/google-ads-mcp-complete](https://github.com/smartiesmb/google-ads-mcp-complete) — additions for v23, conversion goals, keyword planner, asset removal, and production fixes.
