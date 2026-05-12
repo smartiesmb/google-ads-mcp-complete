@@ -31,8 +31,13 @@ class CampaignTools:
         end_date: Optional[str] = None,
         target_locations: Optional[List[str]] = None,
         target_languages: Optional[List[str]] = None,
+        validate_only: bool = False,
     ) -> Dict[str, Any]:
-        """Create a new campaign with budget and settings."""
+        """Create a new campaign with budget and settings.
+
+        validate_only=True: API pre-flight only — validates the operation server-side
+        without persisting any change. Returns success=True if it would have worked.
+        """
         try:
             client = self.auth_manager.get_client(customer_id)
             
@@ -111,7 +116,14 @@ class CampaignTools:
             campaign_response = campaign_service.mutate_campaigns(
                 customer_id=customer_id,
                 operations=[campaign_operation],
+                validate_only=validate_only,
             )
+            if validate_only:
+                return {
+                    "success": True,
+                    "validate_only": True,
+                    "note": "Validation succeeded — no campaign was created.",
+                }
             
             campaign_resource_name = campaign_response.results[0].resource_name
             campaign_id = campaign_resource_name.split("/")[-1]
