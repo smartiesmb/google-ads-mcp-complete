@@ -577,3 +577,79 @@ class ConversionTools:
         except GoogleAdsException as e:
             logger.error(f"Failed to update campaign conversion goal: {e}")
             return {"success": False, "error": str(e), "error_type": "GoogleAdsException"}
+
+    async def create_conversion_value_rule(
+        self,
+        customer_id: str,
+        action_type: str,
+        action_value: float,
+        geo_location_ids: list = None,
+        device_types: list = None,
+    ) -> Dict[str, Any]:
+        """Create a conversion value rule (multiply/add/replace conv value by condition).
+
+        action_type: MULTIPLY, ADD, SET
+        """
+        try:
+            client = self.auth_manager.get_client(customer_id)
+            service = client.get_service("ConversionValueRuleService")
+            op = client.get_type("ConversionValueRuleOperation")
+            r = op.create
+            r.action.operation = getattr(
+                client.enums.ValueRuleOperationEnum, action_type
+            )
+            r.action.value = action_value
+            if geo_location_ids:
+                for loc in geo_location_ids:
+                    r.geo_location_condition.geo_target_constants.append(
+                        client.get_service("GeoTargetConstantService").geo_target_constant_path(loc)
+                    )
+                r.geo_location_condition.geo_match_type = (
+                    client.enums.ValueRuleGeoLocationMatchTypeEnum.LOCATION_OF_PRESENCE
+                )
+            if device_types:
+                for dt in device_types:
+                    r.device_condition.device_types.append(
+                        getattr(client.enums.ValueRuleDeviceTypeEnum, dt)
+                    )
+            response = service.mutate_conversion_value_rules(
+                customer_id=customer_id, operations=[op]
+            )
+            return {
+                "success": True,
+                "resource_name": response.results[0].resource_name,
+            }
+        except GoogleAdsException as e:
+            logger.error(f"Failed to create conversion value rule: {e}")
+            return {"success": False, "error": str(e), "error_type": "GoogleAdsException"}
+
+    async def set_attribution_model(
+        self,
+        customer_id: str,
+        conversion_action_id: str,
+        attribution_model: str,
+    ) -> Dict[str, Any]:
+        """Change attribution model for a conversion action.
+
+        attribution_model: LAST_CLICK, FIRST_CLICK, LINEAR, TIME_DECAY,
+            POSITION_BASED, DATA_DRIVEN.
+        """
+        try:
+            client = self.auth_manager.get_client(customer_id)
+            service = client.get_service("ConversionActionService")
+            op = client.get_type("ConversionActionOperation")
+            ca = op.update
+            ca.resource_name = (
+                f"customers/{customer_id}/conversionActions/{conversion_action_id}"
+            )
+            ca.attribution_model_settings.attribution_model = getattr(
+                client.enums.AttributionModelEnum, attribution_model
+            )
+            op.update_mask.paths.append("attribution_model_settings.attribution_model")
+            response = service.mutate_conversion_actions(
+                customer_id=customer_id, operations=[op]
+            )
+            return {"success": True, "resource_name": response.results[0].resource_name}
+        except GoogleAdsException as e:
+            logger.error(f"Failed to set attribution model: {e}")
+            return {"success": False, "error": str(e), "error_type": "GoogleAdsException"}
