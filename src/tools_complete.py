@@ -28,6 +28,24 @@ from .utils import currency_to_micros, micros_to_currency
 logger = structlog.get_logger(__name__)
 
 
+import os
+
+_MUTATING_PREFIXES = (
+    "create_", "update_", "delete_", "pause_", "enable_", "resume_", "remove_",
+    "add_", "apply_", "dismiss_", "upload_", "set_", "link_", "copy_", "subscribe_",
+    "graduate_", "start_", "end_", "drop_", "kill_", "save_", "clean_",
+)
+
+
+def _is_mutating(tool_name: str) -> bool:
+    return any(tool_name.startswith(p) for p in _MUTATING_PREFIXES)
+
+
+def _dry_run_active() -> bool:
+    return os.getenv("GADS_MCP_DRY_RUN", "").strip() in ("1", "true", "True", "yes", "YES")
+
+
+
 class GoogleAdsTools:
     """Complete implementation of all Google Ads API v20 tools."""
     
@@ -1049,7 +1067,18 @@ class GoogleAdsTools:
         for param, config in tool_config["parameters"].items():
             if config.get("required", False) and param not in arguments:
                 raise ValueError(f"Missing required parameter: {param}")
-                
+
+        # Dry-run guard
+        if _is_mutating(name) and _dry_run_active():
+            logger.warning("dry_run_blocked", tool=name, arguments=arguments)
+            return {
+                "success": True,
+                "dry_run": True,
+                "tool": name,
+                "params": arguments,
+                "note": "Mutation skipped because GADS_MCP_DRY_RUN=1.",
+            }
+
         # Execute the handler
         return await handler(**arguments)
         
