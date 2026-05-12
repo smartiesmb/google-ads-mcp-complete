@@ -851,3 +851,128 @@ class InsightsTools:
                 "error": str(e),
                 "error_type": "GoogleAdsException",
             }
+
+    # ------------------------------------------------------------------
+    # RECOMMENDATIONS SUBSCRIPTIONS (auto-apply)
+    # ------------------------------------------------------------------
+    async def list_recommendation_subscriptions(self, customer_id: str) -> Dict[str, Any]:
+        """List active auto-apply subscriptions on the account."""
+        try:
+            client = self.auth_manager.get_client(customer_id)
+            service = client.get_service("GoogleAdsService")
+            query = """
+                SELECT
+                    recommendation_subscription.type,
+                    recommendation_subscription.status,
+                    recommendation_subscription.create_date_time,
+                    recommendation_subscription.modify_date_time
+                FROM recommendation_subscription
+            """
+            response = service.search(customer_id=customer_id, query=query)
+            subs = []
+            for row in response:
+                s = row.recommendation_subscription
+                subs.append({
+                    "type": str(s.type.name),
+                    "status": str(s.status.name),
+                    "created": str(s.create_date_time),
+                    "modified": str(s.modify_date_time),
+                })
+            return {"success": True, "subscriptions": subs}
+        except GoogleAdsException as e:
+            logger.error(f"Failed to list subscriptions: {e}")
+            return {"success": False, "error": str(e), "error_type": "GoogleAdsException"}
+
+    async def subscribe_to_recommendations(
+        self,
+        customer_id: str,
+        recommendation_type: str,
+        enabled: bool = True,
+    ) -> Dict[str, Any]:
+        """Auto-apply a recommendation type.
+
+        recommendation_type examples: KEYWORD, TEXT_AD, TARGET_CPA_OPT_IN,
+            MAXIMIZE_CONVERSIONS_OPT_IN, OPTIMIZE_AD_ROTATION, RESPONSIVE_SEARCH_AD,
+            UPGRADE_SMART_SHOPPING_CAMPAIGN_TO_PERFORMANCE_MAX.
+        """
+        try:
+            client = self.auth_manager.get_client(customer_id)
+            service = client.get_service("RecommendationSubscriptionService")
+            op = client.get_type("RecommendationSubscriptionOperation")
+            sub = op.create
+            sub.type_ = getattr(
+                client.enums.RecommendationTypeEnum, recommendation_type
+            )
+            sub.status = (
+                client.enums.RecommendationSubscriptionStatusEnum.ENABLED
+                if enabled
+                else client.enums.RecommendationSubscriptionStatusEnum.PAUSED
+            )
+            response = service.mutate_recommendation_subscription(
+                customer_id=customer_id, operations=[op]
+            )
+            return {
+                "success": True,
+                "resource_name": response.results[0].resource_name,
+                "type": recommendation_type,
+                "enabled": enabled,
+            }
+        except GoogleAdsException as e:
+            logger.error(f"Failed to subscribe: {e}")
+            return {"success": False, "error": str(e), "error_type": "GoogleAdsException"}
+
+    # ------------------------------------------------------------------
+    # AUDIENCE INSIGHTS (real API)
+    # ------------------------------------------------------------------
+    async def generate_audience_insights(
+        self,
+        customer_id: str,
+        location_ids: Optional[List[str]] = None,
+        user_interests: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """Generate audience insights via AudienceInsightsService."""
+        try:
+            client = self.auth_manager.get_client(customer_id)
+            service = client.get_service("AudienceInsightsService")
+
+            if not location_ids:
+                location_ids = ["2756"]
+
+            request = client.get_type("GenerateAudienceCompositionInsightsRequest")
+            request.customer_id = customer_id
+            request.dimensions.append(
+                client.enums.AudienceInsightsDimensionEnum.AFFINITY_USER_INTEREST
+            )
+            request.dimensions.append(
+                client.enums.AudienceInsightsDimensionEnum.IN_MARKET_USER_INTEREST
+            )
+
+            audience = client.get_type("InsightsAudience")
+            for loc in location_ids:
+                geo = audience.country_locations.add()
+                geo.geo_target_constant = (
+                    client.get_service("GeoTargetConstantService").geo_target_constant_path(loc)
+                )
+            if user_interests:
+                for ui in user_interests:
+                    seed = audience.topic_audience_combinations.add()
+                    interest = seed.included_audiences.add()
+                    interest.user_interest.user_interest_category = (
+                        f"customers/{customer_id}/userInterests/{ui}"
+                    )
+            request.audience = audience
+
+            response = service.generate_audience_composition_insights(request=request)
+            findings = []
+            for section in response.sections:
+                for finding in section.top_attributes:
+                    findings.append({
+                        "dimension": str(section.dimension.name),
+                        "attribute": str(finding.attribute.display_name),
+                        "share": round(float(finding.share or 0) * 100, 2),
+                        "index": round(float(finding.index or 0), 2),
+                    })
+            return {"success": True, "findings": findings}
+        except GoogleAdsException as e:
+            logger.error(f"Failed to generate audience insights: {e}")
+            return {"success": False, "error": str(e), "error_type": "GoogleAdsException"}
