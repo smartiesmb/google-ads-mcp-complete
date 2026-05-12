@@ -22,6 +22,7 @@ from .tools_audiences import AudienceTools
 from .tools_geography import GeographyTools
 from .tools_bidding import BiddingTools
 from .tools_conversions import ConversionTools
+from .tools_insights import InsightsTools
 from .utils import currency_to_micros, micros_to_currency
 
 logger = structlog.get_logger(__name__)
@@ -47,6 +48,7 @@ class GoogleAdsTools:
         self.geography_tools = GeographyTools(auth_manager, error_handler)
         self.bidding_tools = BiddingTools(auth_manager, error_handler)
         self.conversion_tools = ConversionTools(auth_manager, error_handler)
+        self.insights_tools = InsightsTools(auth_manager, error_handler)
 
         self._tools_registry = self._register_all_tools()
         
@@ -97,10 +99,110 @@ class GoogleAdsTools:
         # Conversion Tracking & Offline Uploads
         tools.update(self._register_conversion_tools())
 
+        # Insights & Reports (auction insights, recommendations, landing pages, etc.)
+        tools.update(self._register_insights_tools())
+
         # # Advanced Features
         # tools.update(self._register_advanced_tools())
 
         return tools
+
+    def _register_insights_tools(self) -> Dict[str, Dict[str, Any]]:
+        """Register Insights & Reports tools (auction insights, recommendations, etc.)."""
+        return {
+            "get_auction_insights": {
+                "description": "Get auction insights (competitor share of voice, outranking share, overlap rate) for a campaign or ad group. Same data as the UI 'Insights sur les enchères' panel. Use this to diagnose 'limited by bid strategy' or 'losing impressions to rank' issues.",
+                "handler": self.insights_tools.get_auction_insights,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "campaign_id": {"type": "string"},
+                    "ad_group_id": {"type": "string"},
+                    "date_range": {"type": "string", "default": "LAST_30_DAYS"},
+                },
+            },
+            "get_recommendations": {
+                "description": "Get all active recommendations from Google (same data as the optimization score panel). Each recommendation includes its type, impact metrics, and resource_name to feed into apply_recommendation / dismiss_recommendation.",
+                "handler": self.insights_tools.get_recommendations,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "recommendation_types": {
+                        "type": "array",
+                        "description": "Optional filter, e.g. ['KEYWORD', 'TEXT_AD', 'TARGET_CPA_OPT_IN', 'MAXIMIZE_CONVERSIONS_OPT_IN', 'OPTIMIZE_AD_ROTATION']",
+                    },
+                    "include_dismissed": {"type": "boolean", "default": False},
+                },
+            },
+            "apply_recommendation": {
+                "description": "Apply a Google Ads recommendation by its full resource_name (from get_recommendations). USE WITH CARE — this mutates the account immediately.",
+                "handler": self.insights_tools.apply_recommendation,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "recommendation_resource_name": {
+                        "type": "string",
+                        "required": True,
+                        "description": "Full resource name, e.g. 'customers/1234567890/recommendations/ABC123'",
+                    },
+                },
+            },
+            "dismiss_recommendation": {
+                "description": "Dismiss a recommendation (hide it from the optimization score). Reversible via the UI.",
+                "handler": self.insights_tools.dismiss_recommendation,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "recommendation_resource_name": {"type": "string", "required": True},
+                },
+            },
+            "get_landing_page_report": {
+                "description": "Get landing page performance: clicks, conversions, CPA, mobile-friendliness, and AMP rate per final URL. Same as UI 'Pages de destination'.",
+                "handler": self.insights_tools.get_landing_page_report,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "campaign_id": {"type": "string"},
+                    "date_range": {"type": "string", "default": "LAST_30_DAYS"},
+                    "min_impressions": {"type": "number", "default": 1},
+                },
+            },
+            "get_search_term_clusters": {
+                "description": "Get Google's semantically-clustered search term insights (the 'Categories' view in UI Search Terms). Aggregates queries into themes with metrics. Different from get_search_terms_report (raw term-level data).",
+                "handler": self.insights_tools.get_search_term_clusters,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "campaign_id": {"type": "string"},
+                    "date_range": {"type": "string", "default": "LAST_30_DAYS"},
+                },
+            },
+            "get_hourly_performance": {
+                "description": "Get performance broken down by hour of day (0-23). Aggregates clicks, cost, conversions per hour bucket. Useful for ad scheduling decisions.",
+                "handler": self.insights_tools.get_hourly_performance,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "campaign_id": {"type": "string"},
+                    "date_range": {"type": "string", "default": "LAST_30_DAYS"},
+                },
+            },
+            "get_day_of_week_performance": {
+                "description": "Get performance broken down by day of week (Monday..Sunday). Useful to detect best/worst converting days.",
+                "handler": self.insights_tools.get_day_of_week_performance,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "campaign_id": {"type": "string"},
+                    "date_range": {"type": "string", "default": "LAST_30_DAYS"},
+                },
+            },
+            "get_change_history": {
+                "description": "Get the change event audit trail (who changed what when). Filter by resource_type (CAMPAIGN, AD_GROUP, AD, AD_GROUP_CRITERION, CAMPAIGN_BUDGET, BIDDING_STRATEGY, etc.).",
+                "handler": self.insights_tools.get_change_history,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "date_range": {"type": "string", "default": "LAST_14_DAYS"},
+                    "resource_type": {
+                        "type": "string",
+                        "description": "Filter: CAMPAIGN, AD_GROUP, AD, AD_GROUP_CRITERION, CAMPAIGN_BUDGET, CAMPAIGN_CRITERION, BIDDING_STRATEGY, FEED, FEED_ITEM, AD_GROUP_AD",
+                    },
+                    "limit": {"type": "number", "default": 100},
+                },
+            },
+        }
 
     def _register_conversion_tools(self) -> Dict[str, Dict[str, Any]]:
         """Register conversion tracking and offline upload tools."""
