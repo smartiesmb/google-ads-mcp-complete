@@ -24,6 +24,7 @@ from .tools_bidding import BiddingTools
 from .tools_conversions import ConversionTools
 from .tools_insights import InsightsTools
 from .utils import currency_to_micros, micros_to_currency
+from . import audit_log
 
 logger = structlog.get_logger(__name__)
 
@@ -1071,6 +1072,11 @@ class GoogleAdsTools:
         # Dry-run guard
         if _is_mutating(name) and _dry_run_active():
             logger.warning("dry_run_blocked", tool=name, arguments=arguments)
+            audit_log.append({
+                "event": "dry_run_skip",
+                "tool": name,
+                "params": arguments,
+            })
             return {
                 "success": True,
                 "dry_run": True,
@@ -1079,8 +1085,27 @@ class GoogleAdsTools:
                 "note": "Mutation skipped because GADS_MCP_DRY_RUN=1.",
             }
 
+        # Audit log: before-mutation entry
+        mutating = _is_mutating(name)
+        if mutating:
+            audit_log.append({
+                "event": "before",
+                "tool": name,
+                "params": arguments,
+            })
+
         # Execute the handler
-        return await handler(**arguments)
+        result = await handler(**arguments)
+
+        # Audit log: after-mutation entry
+        if mutating:
+            audit_log.append({
+                "event": "after",
+                "tool": name,
+                "success": bool(result.get("success")) if isinstance(result, dict) else None,
+            })
+
+        return result
         
     # Account Management Methods
     
