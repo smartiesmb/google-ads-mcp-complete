@@ -375,3 +375,135 @@ class AssetTools:
             resource_name=resource_name,
             mutate_method="mutate_asset_group_assets",
         )
+
+    async def create_lead_form_asset(
+        self,
+        customer_id: str,
+        business_name: str,
+        call_to_action: str,
+        headline: str,
+        description: str,
+        privacy_policy_url: str,
+        fields: list,
+        post_submit_headline: str = "Merci !",
+        post_submit_description: str = "Nous vous recontactons sous 24h.",
+    ) -> dict:
+        """Create a Lead Form asset.
+
+        fields: list of dicts {'input_type': 'EMAIL'|'PHONE_NUMBER'|'FULL_NAME'|...}
+        call_to_action: e.g. 'GET_QUOTE', 'BOOK_NOW', 'CONTACT_US', 'LEARN_MORE',
+            'SUBSCRIBE', 'DOWNLOAD', 'APPLY_NOW', 'SIGN_UP', 'GET_OFFER'.
+        """
+        from google.ads.googleads.errors import GoogleAdsException
+        try:
+            client = self.auth_manager.get_client(customer_id)
+            service = client.get_service("AssetService")
+            op = client.get_type("AssetOperation")
+            asset = op.create
+            asset.type_ = client.enums.AssetTypeEnum.LEAD_FORM
+            lf = asset.lead_form_asset
+            lf.business_name = business_name
+            lf.call_to_action_type = getattr(
+                client.enums.LeadFormCallToActionTypeEnum, call_to_action
+            )
+            lf.headline = headline
+            lf.description = description
+            lf.privacy_policy_url = privacy_policy_url
+            lf.post_submit_headline = post_submit_headline
+            lf.post_submit_description = post_submit_description
+            for f in fields:
+                field = client.get_type("LeadFormField")
+                field.input_type = getattr(
+                    client.enums.LeadFormFieldUserInputTypeEnum, f["input_type"]
+                )
+                lf.fields.append(field)
+            response = service.mutate_assets(customer_id=customer_id, operations=[op])
+            return {
+                "success": True,
+                "asset_id": response.results[0].resource_name.split("/")[-1],
+                "resource_name": response.results[0].resource_name,
+            }
+        except GoogleAdsException as e:
+            return {"success": False, "error": str(e), "error_type": "GoogleAdsException"}
+
+    async def create_promotion_asset(
+        self,
+        customer_id: str,
+        promotion_target: str,
+        discount_modifier: str = "UP_TO",
+        percent_off: float = 10.0,
+        language_code: str = "fr",
+        final_urls: list = None,
+    ) -> dict:
+        """Create a Promotion extension."""
+        from google.ads.googleads.errors import GoogleAdsException
+        try:
+            client = self.auth_manager.get_client(customer_id)
+            service = client.get_service("AssetService")
+            op = client.get_type("AssetOperation")
+            asset = op.create
+            asset.type_ = client.enums.AssetTypeEnum.PROMOTION
+            p = asset.promotion_asset
+            p.promotion_target = promotion_target
+            p.discount_modifier = getattr(
+                client.enums.PromotionExtensionDiscountModifierEnum, discount_modifier
+            )
+            p.percent_off = int(percent_off * 1_000_000)
+            p.language_code = language_code
+            if final_urls:
+                asset.final_urls.extend(final_urls)
+            response = service.mutate_assets(customer_id=customer_id, operations=[op])
+            return {
+                "success": True,
+                "asset_id": response.results[0].resource_name.split("/")[-1],
+                "resource_name": response.results[0].resource_name,
+            }
+        except GoogleAdsException as e:
+            return {"success": False, "error": str(e), "error_type": "GoogleAdsException"}
+
+    async def create_price_asset(
+        self,
+        customer_id: str,
+        price_type: str,
+        price_qualifier: str,
+        language_code: str = "fr",
+        offerings: list = None,
+    ) -> dict:
+        """Create a Price extension.
+
+        price_type: SERVICES, SERVICE_CATEGORIES, BRANDS, PRODUCT_TIERS, ...
+        offerings: list of dicts {'header','description','final_url','price_amount','currency_code','unit'}
+        """
+        from google.ads.googleads.errors import GoogleAdsException
+        from .utils import currency_to_micros
+        try:
+            client = self.auth_manager.get_client(customer_id)
+            service = client.get_service("AssetService")
+            op = client.get_type("AssetOperation")
+            asset = op.create
+            asset.type_ = client.enums.AssetTypeEnum.PRICE
+            pr = asset.price_asset
+            pr.type_ = getattr(client.enums.PriceExtensionTypeEnum, price_type)
+            pr.price_qualifier = getattr(
+                client.enums.PriceExtensionPriceQualifierEnum, price_qualifier
+            )
+            pr.language_code = language_code
+            for o in (offerings or []):
+                off = client.get_type("PriceOffering")
+                off.header = o["header"]
+                off.description = o["description"]
+                off.final_url = o["final_url"]
+                off.price.amount_micros = currency_to_micros(o["price_amount"])
+                off.price.currency_code = o.get("currency_code", "CHF")
+                off.unit = getattr(
+                    client.enums.PriceExtensionPriceUnitEnum, o.get("unit", "PER_MONTH")
+                )
+                pr.price_offerings.append(off)
+            response = service.mutate_assets(customer_id=customer_id, operations=[op])
+            return {
+                "success": True,
+                "asset_id": response.results[0].resource_name.split("/")[-1],
+                "resource_name": response.results[0].resource_name,
+            }
+        except GoogleAdsException as e:
+            return {"success": False, "error": str(e), "error_type": "GoogleAdsException"}
