@@ -367,6 +367,8 @@ class KeywordTools:
         include_metrics: bool = False,
         date_range: str = "LAST_30_DAYS",
         include_campaign_negatives: bool = True,
+        limit: int = 500,
+        offset: int = 0,
     ) -> Dict[str, Any]:
         """List keywords with optional performance data.
 
@@ -444,7 +446,9 @@ class KeywordTools:
 
             if conditions:
                 query += " AND " + " AND ".join(conditions)
-                
+
+            query += f" LIMIT {limit} OFFSET {offset}"
+
             response = googleads_service.search(
                 customer_id=customer_id, query=query
             )

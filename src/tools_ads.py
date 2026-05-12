@@ -255,7 +255,9 @@ class AdTools:
         customer_id: str,
         ad_group_id: Optional[str] = None,
         campaign_id: Optional[str] = None,
-        status: Optional[str] = None
+        status: Optional[str] = None,
+        limit: int = 500,
+        offset: int = 0,
     ) -> Dict[str, Any]:
         """List ads with optional filters."""
         try:
@@ -296,11 +298,13 @@ class AdTools:
                 
             if conditions:
                 query += " WHERE " + " AND ".join(conditions)
-                
+
+            query += f" LIMIT {limit} OFFSET {offset}"
+
             response = googleads_service.search(
                 customer_id=customer_id, query=query
             )
-            
+
             ads = []
             for row in response:
                 ad_data = {
