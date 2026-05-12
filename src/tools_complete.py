@@ -23,6 +23,15 @@ from .tools_geography import GeographyTools
 from .tools_bidding import BiddingTools
 from .tools_conversions import ConversionTools
 from .tools_insights import InsightsTools
+from .tools_asset_performance import AssetPerformanceTools
+from .tools_segments import SegmentTools
+from .tools_forecasting import ForecastingTools
+from .tools_customer_match import CustomerMatchTools
+from .tools_experiments import ExperimentTools
+from .tools_pmax import PerformanceMaxTools
+from .tools_video import VideoTools
+from .tools_shopping import ShoppingTools
+from .tools_quota import QuotaTools
 from .utils import currency_to_micros, micros_to_currency
 from . import audit_log
 
@@ -68,6 +77,15 @@ class GoogleAdsTools:
         self.bidding_tools = BiddingTools(auth_manager, error_handler)
         self.conversion_tools = ConversionTools(auth_manager, error_handler)
         self.insights_tools = InsightsTools(auth_manager, error_handler)
+        self.asset_performance_tools = AssetPerformanceTools(auth_manager, error_handler)
+        self.segment_tools = SegmentTools(auth_manager, error_handler)
+        self.forecasting_tools = ForecastingTools(auth_manager, error_handler)
+        self.customer_match_tools = CustomerMatchTools(auth_manager, error_handler)
+        self.experiment_tools = ExperimentTools(auth_manager, error_handler)
+        self.pmax_tools = PerformanceMaxTools(auth_manager, error_handler)
+        self.video_tools = VideoTools(auth_manager, error_handler)
+        self.shopping_tools = ShoppingTools(auth_manager, error_handler)
+        self.quota_tools = QuotaTools(auth_manager, error_handler)
 
         self._tools_registry = self._register_all_tools()
         
@@ -120,6 +138,20 @@ class GoogleAdsTools:
 
         # Insights & Reports (auction insights, recommendations, landing pages, etc.)
         tools.update(self._register_insights_tools())
+
+        # Piloting completion (v2.1)
+        tools.update(self._register_asset_performance_tools())
+        tools.update(self._register_segments_tools())
+        tools.update(self._register_forecasting_tools())
+        tools.update(self._register_customer_match_tools())
+        tools.update(self._register_experiment_tools())
+        tools.update(self._register_pmax_tools())
+        tools.update(self._register_video_tools())
+        tools.update(self._register_shopping_tools())
+        tools.update(self._register_lead_form_assets())
+        tools.update(self._register_extra_insights_tools())
+        tools.update(self._register_extra_conversion_tools())
+        tools.update(self._register_quota_tools())
 
         # # Advanced Features
         # tools.update(self._register_advanced_tools())
@@ -1371,6 +1403,388 @@ class GoogleAdsTools:
                 },
             },
         }
-    
+
+    # ---- v2.1 Piloting Completion registrations ----
+
+    def _register_asset_performance_tools(self) -> Dict[str, Dict[str, Any]]:
+        return {
+            "get_asset_performance_report": {
+                "description": "Per-asset (headline/description) RSA performance with PerformanceLabel (BEST/GOOD/LOW/PENDING).",
+                "handler": self.asset_performance_tools.get_asset_performance_report,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "ad_group_id": {"type": "string"},
+                    "campaign_id": {"type": "string"},
+                    "date_range": {"type": "string", "default": "LAST_30_DAYS"},
+                },
+            },
+        }
+
+    def _register_segments_tools(self) -> Dict[str, Dict[str, Any]]:
+        return {
+            "get_demographic_performance": {
+                "description": "Age + gender breakdown.",
+                "handler": self.segment_tools.get_demographic_performance,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "campaign_id": {"type": "string"},
+                    "date_range": {"type": "string", "default": "LAST_30_DAYS"},
+                },
+            },
+            "get_distance_performance": {
+                "description": "Performance by user distance from business location.",
+                "handler": self.segment_tools.get_distance_performance,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "campaign_id": {"type": "string"},
+                    "date_range": {"type": "string", "default": "LAST_30_DAYS"},
+                },
+            },
+            "get_click_view": {
+                "description": "Click-level data (gclid, device, location). Max 90 days back.",
+                "handler": self.segment_tools.get_click_view,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "date_range": {"type": "string", "default": "LAST_7_DAYS"},
+                    "limit": {"type": "number", "default": 100},
+                },
+            },
+        }
+
+    def _register_forecasting_tools(self) -> Dict[str, Dict[str, Any]]:
+        return {
+            "get_keyword_planner_forecast": {
+                "description": "Forecast impressions/clicks/cost for keywords at a given CPC bid.",
+                "handler": self.forecasting_tools.get_keyword_planner_forecast,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "keywords": {"type": "array", "required": True},
+                    "language_id": {"type": "string", "default": "1002"},
+                    "location_ids": {"type": "array"},
+                    "cpc_bid": {"type": "number", "default": 2.0},
+                },
+            },
+            "get_keyword_bid_simulation": {
+                "description": "Bid landscape simulation for a specific keyword.",
+                "handler": self.forecasting_tools.get_keyword_bid_simulation,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "keyword_id": {"type": "string", "required": True},
+                    "ad_group_id": {"type": "string", "required": True},
+                },
+            },
+            "get_campaign_simulation": {
+                "description": "Campaign-level bidding simulation (TARGET_CPA, TARGET_ROAS, BUDGET, CPC_BID).",
+                "handler": self.forecasting_tools.get_campaign_simulation,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "campaign_id": {"type": "string", "required": True},
+                    "simulation_type": {"type": "string", "default": "TARGET_CPA"},
+                },
+            },
+            "get_reach_forecast": {
+                "description": "YouTube/Display reach forecast via Reach Planner.",
+                "handler": self.forecasting_tools.get_reach_forecast,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "budget_micros": {"type": "number", "required": True},
+                    "location_ids": {"type": "array"},
+                    "product_mix": {"type": "array"},
+                },
+            },
+        }
+
+    def _register_customer_match_tools(self) -> Dict[str, Dict[str, Any]]:
+        return {
+            "create_customer_match_list": {
+                "description": "Create an empty Customer Match user list (lifespan default 540 days).",
+                "handler": self.customer_match_tools.create_customer_match_list,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "name": {"type": "string", "required": True},
+                    "description": {"type": "string"},
+                    "membership_lifespan_days": {"type": "number", "default": 540},
+                },
+            },
+            "upload_customer_match_users": {
+                "description": "Upload emails/phones (auto SHA-256 hashed) to an existing Customer Match list.",
+                "handler": self.customer_match_tools.upload_customer_match_users,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "user_list_id": {"type": "string", "required": True},
+                    "emails": {"type": "array"},
+                    "phones": {"type": "array"},
+                },
+            },
+        }
+
+    def _register_experiment_tools(self) -> Dict[str, Dict[str, Any]]:
+        return {
+            "list_experiments": {
+                "description": "List campaign experiments.",
+                "handler": self.experiment_tools.list_experiments,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "campaign_id": {"type": "string"},
+                },
+            },
+            "create_experiment": {
+                "description": "Create a SEARCH_CUSTOM experiment from an existing campaign with traffic split.",
+                "handler": self.experiment_tools.create_experiment,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "base_campaign_id": {"type": "string", "required": True},
+                    "name": {"type": "string", "required": True},
+                    "traffic_split_percent": {"type": "number", "default": 50},
+                },
+            },
+            "start_experiment": {
+                "description": "Move experiment from SETUP to RUNNING.",
+                "handler": self.experiment_tools.start_experiment,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "experiment_resource_name": {"type": "string", "required": True},
+                },
+            },
+            "end_experiment": {
+                "description": "Stop an experiment immediately.",
+                "handler": self.experiment_tools.end_experiment,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "experiment_resource_name": {"type": "string", "required": True},
+                },
+            },
+            "graduate_experiment": {
+                "description": "Promote experiment to a standalone campaign with a given budget.",
+                "handler": self.experiment_tools.graduate_experiment,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "experiment_resource_name": {"type": "string", "required": True},
+                    "campaign_budget_resource_name": {"type": "string", "required": True},
+                },
+            },
+        }
+
+    def _register_pmax_tools(self) -> Dict[str, Dict[str, Any]]:
+        return {
+            "create_pmax_campaign": {
+                "description": "Create a Performance Max campaign in PAUSED state. Use either target_roas OR target_cpa_micros.",
+                "handler": self.pmax_tools.create_pmax_campaign,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "name": {"type": "string", "required": True},
+                    "budget_resource_name": {"type": "string", "required": True},
+                    "target_roas": {"type": "number"},
+                    "target_cpa_micros": {"type": "number"},
+                    "brand_guidelines_enabled": {"type": "boolean", "default": False},
+                },
+            },
+            "create_asset_group": {
+                "description": "Create an empty PMax asset group.",
+                "handler": self.pmax_tools.create_asset_group,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "campaign_id": {"type": "string", "required": True},
+                    "name": {"type": "string", "required": True},
+                    "final_urls": {"type": "array", "required": True},
+                    "final_mobile_urls": {"type": "array"},
+                },
+            },
+            "add_asset_group_signal": {
+                "description": "Add a SEARCH_THEME (keyword) or AUDIENCE signal to an asset group.",
+                "handler": self.pmax_tools.add_asset_group_signal,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "asset_group_id": {"type": "string", "required": True},
+                    "signal_type": {"type": "string", "required": True},
+                    "signal_value": {"type": "string", "required": True},
+                },
+            },
+            "link_asset_to_asset_group": {
+                "description": "Link an existing asset to a PMax asset group with a field_type.",
+                "handler": self.pmax_tools.link_asset_to_asset_group,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "asset_group_id": {"type": "string", "required": True},
+                    "asset_id": {"type": "string", "required": True},
+                    "field_type": {"type": "string", "required": True},
+                },
+            },
+            "list_asset_groups": {
+                "description": "List all asset groups.",
+                "handler": self.pmax_tools.list_asset_groups,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "campaign_id": {"type": "string"},
+                },
+            },
+        }
+
+    def _register_video_tools(self) -> Dict[str, Dict[str, Any]]:
+        return {
+            "create_video_campaign": {
+                "description": "Create a YouTube video campaign in PAUSED state.",
+                "handler": self.video_tools.create_video_campaign,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "name": {"type": "string", "required": True},
+                    "budget_resource_name": {"type": "string", "required": True},
+                    "sub_type": {"type": "string", "default": "VIDEO_REACH"},
+                },
+            },
+            "create_demand_gen_campaign": {
+                "description": "Create a Demand Gen (ex-Discovery) campaign in PAUSED state.",
+                "handler": self.video_tools.create_demand_gen_campaign,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "name": {"type": "string", "required": True},
+                    "budget_resource_name": {"type": "string", "required": True},
+                },
+            },
+            "upload_youtube_video_asset": {
+                "description": "Register a YouTube video ID as an asset.",
+                "handler": self.video_tools.upload_youtube_video_asset,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "youtube_video_id": {"type": "string", "required": True},
+                    "name": {"type": "string", "required": True},
+                },
+            },
+        }
+
+    def _register_shopping_tools(self) -> Dict[str, Dict[str, Any]]:
+        return {
+            "list_merchant_center_links": {
+                "description": "List Merchant Center accounts linked to this Google Ads customer.",
+                "handler": self.shopping_tools.list_merchant_center_links,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                },
+            },
+            "create_shopping_campaign": {
+                "description": "Create a Shopping campaign (Standard or Smart). Smart Shopping is deprecated.",
+                "handler": self.shopping_tools.create_shopping_campaign,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "name": {"type": "string", "required": True},
+                    "budget_resource_name": {"type": "string", "required": True},
+                    "merchant_id": {"type": "number", "required": True},
+                    "country_code": {"type": "string", "default": "CH"},
+                    "is_standard": {"type": "boolean", "default": False},
+                },
+            },
+            "get_product_performance": {
+                "description": "Per-product performance from shopping_performance_view.",
+                "handler": self.shopping_tools.get_product_performance,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "campaign_id": {"type": "string"},
+                    "date_range": {"type": "string", "default": "LAST_30_DAYS"},
+                },
+            },
+        }
+
+    def _register_lead_form_assets(self) -> Dict[str, Dict[str, Any]]:
+        return {
+            "create_lead_form_asset": {
+                "description": "Create a Lead Form asset (in-ad form). fields=[{'input_type':'EMAIL'},{'input_type':'PHONE_NUMBER'},...]",
+                "handler": self.asset_tools.create_lead_form_asset,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "business_name": {"type": "string", "required": True},
+                    "call_to_action": {"type": "string", "required": True},
+                    "headline": {"type": "string", "required": True},
+                    "description": {"type": "string", "required": True},
+                    "privacy_policy_url": {"type": "string", "required": True},
+                    "fields": {"type": "array", "required": True},
+                    "post_submit_headline": {"type": "string", "default": "Merci !"},
+                    "post_submit_description": {"type": "string", "default": "Nous vous recontactons sous 24h."},
+                },
+            },
+            "create_promotion_asset": {
+                "description": "Create a Promotion extension asset.",
+                "handler": self.asset_tools.create_promotion_asset,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "promotion_target": {"type": "string", "required": True},
+                    "discount_modifier": {"type": "string", "default": "UP_TO"},
+                    "percent_off": {"type": "number", "default": 10.0},
+                    "language_code": {"type": "string", "default": "fr"},
+                    "final_urls": {"type": "array"},
+                },
+            },
+            "create_price_asset": {
+                "description": "Create a Price extension asset.",
+                "handler": self.asset_tools.create_price_asset,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "price_type": {"type": "string", "required": True},
+                    "price_qualifier": {"type": "string", "required": True},
+                    "language_code": {"type": "string", "default": "fr"},
+                    "offerings": {"type": "array"},
+                },
+            },
+        }
+
+    def _register_extra_insights_tools(self) -> Dict[str, Dict[str, Any]]:
+        return {
+            "list_recommendation_subscriptions": {
+                "description": "List active auto-apply subscriptions.",
+                "handler": self.insights_tools.list_recommendation_subscriptions,
+                "parameters": {"customer_id": {"type": "string", "required": True}},
+            },
+            "subscribe_to_recommendations": {
+                "description": "Auto-apply a recommendation type (KEYWORD, TEXT_AD, TARGET_CPA_OPT_IN, etc.).",
+                "handler": self.insights_tools.subscribe_to_recommendations,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "recommendation_type": {"type": "string", "required": True},
+                    "enabled": {"type": "boolean", "default": True},
+                },
+            },
+            "generate_audience_insights": {
+                "description": "Generate audience composition insights via AudienceInsightsService.",
+                "handler": self.insights_tools.generate_audience_insights,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "location_ids": {"type": "array"},
+                    "user_interests": {"type": "array"},
+                },
+            },
+        }
+
+    def _register_extra_conversion_tools(self) -> Dict[str, Dict[str, Any]]:
+        return {
+            "create_conversion_value_rule": {
+                "description": "Create a conversion value rule (MULTIPLY/ADD/SET) by geo or device.",
+                "handler": self.conversion_tools.create_conversion_value_rule,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "action_type": {"type": "string", "required": True},
+                    "action_value": {"type": "number", "required": True},
+                    "geo_location_ids": {"type": "array"},
+                    "device_types": {"type": "array"},
+                },
+            },
+            "set_attribution_model": {
+                "description": "Change attribution model on a conversion action (LAST_CLICK, DATA_DRIVEN, LINEAR, ...).",
+                "handler": self.conversion_tools.set_attribution_model,
+                "parameters": {
+                    "customer_id": {"type": "string", "required": True},
+                    "conversion_action_id": {"type": "string", "required": True},
+                    "attribution_model": {"type": "string", "required": True},
+                },
+            },
+        }
+
+    def _register_quota_tools(self) -> Dict[str, Dict[str, Any]]:
+        return {
+            "get_api_quota_status": {
+                "description": "Probe the Google Ads API and return rate-limit / quota info.",
+                "handler": self.quota_tools.get_api_quota_status,
+                "parameters": {"customer_id": {"type": "string", "required": True}},
+            },
+        }
+
     # (Account, Ad Group, Ad, Asset, Budget, Keyword, and Advanced tools)
     # These would follow the same pattern as the campaign and reporting tools
