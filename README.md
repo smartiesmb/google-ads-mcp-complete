@@ -267,6 +267,38 @@ For raw debugging, the `run_gaql_query` tool gives you a direct GAQL escape hatc
 
 MIT — see [LICENSE](LICENSE).
 
+## v2.1 — Insights & Piloting Modules (2026-05-12)
+
+**35 new tools** added across 10 modules, bringing the total to **129 tools**.
+
+### New modules
+
+- **Asset Performance** — `get_asset_performance_report` (RSA PerformanceLabel BEST/GOOD/LOW/PENDING)
+- **Segments** — `get_demographic_performance`, `get_distance_performance`, `get_click_view`
+- **Forecasting & Simulation** — `get_keyword_planner_forecast`, `get_keyword_bid_simulation`, `get_campaign_simulation`, `get_reach_forecast`
+- **Customer Match** — `create_customer_match_list`, `upload_customer_match_users` (auto SHA-256 hashing)
+- **Experiments** — `list_experiments`, `create_experiment`, `start_experiment`, `end_experiment`, `graduate_experiment`
+- **Performance Max** — `create_pmax_campaign`, `create_asset_group`, `add_asset_group_signal`, `link_asset_to_asset_group`, `list_asset_groups`
+- **Video & Demand Gen** — `create_video_campaign`, `create_demand_gen_campaign`, `upload_youtube_video_asset`
+- **Shopping** — `list_merchant_center_links`, `create_shopping_campaign`, `get_product_performance`
+- **Assets (Lead Forms / Promotions / Prices)** — `create_lead_form_asset`, `create_promotion_asset`, `create_price_asset`
+- **Quota** — `get_api_quota_status`
+
+### Insights extensions
+- `list_recommendation_subscriptions`, `subscribe_to_recommendations`, `generate_audience_insights`
+
+### Conversion extensions
+- `create_conversion_value_rule`, `set_attribution_model`
+
+### Cross-cutting safety
+- **Dry-run mode** — set env `GADS_MCP_DRY_RUN=1` to make every mutating tool return a fake success without hitting the API. Useful for testing prompts and agent flows.
+- **Audit log** — every mutation is appended to `./audit.log` (JSONL with before/after events). Override path with `GADS_MCP_AUDIT_LOG`.
+- **`validate_only=True`** — exposed on `create_campaign` for server-side pre-flight validation.
+- **Pagination** — `list_keywords` and `list_ads` now accept `limit` and `offset` parameters.
+
+### Note on `get_auction_insights`
+The per-competitor domain breakdown shown in the Google Ads UI ("Insights sur les enchères") is **not exposed via API v20**. This tool returns the next best thing: your own impression-share metrics plus an actionable diagnosis (rank-lost vs budget-lost percentages).
+
 ## Credits
 
 - Original work: [grantweston/google-ads-mcp-complete](https://github.com/grantweston/google-ads-mcp-complete)
