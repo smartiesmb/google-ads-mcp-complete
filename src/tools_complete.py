@@ -55,6 +55,31 @@ def _dry_run_active() -> bool:
     return os.getenv("GADS_MCP_DRY_RUN", "").strip() in ("1", "true", "True", "yes", "YES")
 
 
+# Allowed JSON Schema keywords inside a property definition (draft 2020-12 friendly subset)
+_ALLOWED_SCHEMA_KEYS = {
+    "type", "description", "default", "enum", "items", "properties",
+    "additionalProperties", "minimum", "maximum", "minLength", "maxLength",
+    "pattern", "format", "examples", "minItems", "maxItems",
+}
+
+
+def _sanitize_param_schema(schema: Dict[str, Any]) -> Dict[str, Any]:
+    """Ensure each parameter's JSON Schema is draft 2020-12 valid.
+
+    - type=array MUST have items (default to permissive empty schema)
+    - type=object SHOULD declare properties or additionalProperties (allow any)
+    - Strip unknown keys so the schema is clean for the Anthropic Tools API
+    """
+    out = {k: v for k, v in schema.items() if k in _ALLOWED_SCHEMA_KEYS}
+    t = out.get("type")
+    if t == "array" and "items" not in out:
+        out["items"] = {}
+    if t == "object" and "properties" not in out and "additionalProperties" not in out:
+        out["additionalProperties"] = True
+    return out
+
+
+
 
 class GoogleAdsTools:
     """Complete implementation of all Google Ads API v20 tools."""
@@ -1060,22 +1085,21 @@ class GoogleAdsTools:
         }
         
     def get_all_tools(self) -> List[Tool]:
-        """Get all tools in MCP format."""
+        """Get all tools in MCP format (JSON Schema draft 2020-12 compliant)."""
         tools = []
         for name, config in self._tools_registry.items():
-            # Extract required parameters
             required_params = []
             properties = {}
-            
+
             for param_name, param_config in config["parameters"].items():
-                # Create property schema without the 'required' field
-                prop_schema = {k: v for k, v in param_config.items() if k != "required"}
+                prop_schema = _sanitize_param_schema(
+                    {k: v for k, v in param_config.items() if k != "required"}
+                )
                 properties[param_name] = prop_schema
-                
-                # Add to required list if marked as required
+
                 if param_config.get("required", False):
                     required_params.append(param_name)
-            
+
             tool = Tool(
                 name=name,
                 description=config["description"],
@@ -1083,6 +1107,7 @@ class GoogleAdsTools:
                     "type": "object",
                     "properties": properties,
                     "required": required_params,
+                    "additionalProperties": False,
                 },
             )
             tools.append(tool)
