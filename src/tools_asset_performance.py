@@ -33,7 +33,6 @@ class AssetPerformanceTools:
                 SELECT
                     ad_group_ad_asset_view.field_type,
                     ad_group_ad_asset_view.performance_label,
-                    ad_group_ad_asset_view.policy_summary.approval_status,
                     asset.text_asset.text,
                     asset.id,
                     ad_group_ad.ad.id,
@@ -71,9 +70,6 @@ class AssetPerformanceTools:
                     "campaign_id": str(row.campaign.id),
                     "field_type": str(row.ad_group_ad_asset_view.field_type.name),
                     "performance_label": label,
-                    "approval_status": str(
-                        row.ad_group_ad_asset_view.policy_summary.approval_status.name
-                    ),
                     "text": str(row.asset.text_asset.text),
                     "impressions": int(row.metrics.impressions),
                     "clicks": int(row.metrics.clicks),
