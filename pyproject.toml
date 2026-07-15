@@ -1,7 +1,7 @@
 [project]
 name = "google-ads-mcp-complete"
-version = "2.0.0"
-description = "Complete Google Ads API v21 MCP Server - All 29 tools fully implemented and working"
+version = "2.1.0"
+description = "Complete Google Ads API v24 MCP server - 129 tools, full read/write coverage with dry-run and audit log"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [

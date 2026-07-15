@@ -1,8 +1,10 @@
 # Google Ads MCP — Complete Server
 
-A comprehensive [Model Context Protocol](https://modelcontextprotocol.io) server exposing the full Google Ads API surface to AI assistants (Claude, Cursor, etc.) through ~95 typed tools.
+A comprehensive [Model Context Protocol](https://modelcontextprotocol.io) server exposing the full Google Ads API surface to AI assistants (Claude, Cursor, etc.) through 129 typed tools.
 
-This is a **fork** of [`grantweston/google-ads-mcp-complete`](https://github.com/grantweston/google-ads-mcp-complete) maintained at [`smartiesmb/google-ads-mcp-complete`](https://github.com/smartiesmb/google-ads-mcp-complete) with significant additions: Google Ads API **v23** compatibility, conversion-goals management, keyword planner integration, asset link removal, geographic / age targeting management, and many production-grade fixes.
+This is a **fork** of [`grantweston/google-ads-mcp-complete`](https://github.com/grantweston/google-ads-mcp-complete) maintained at [`smartiesmb/google-ads-mcp-complete`](https://github.com/smartiesmb/google-ads-mcp-complete) with significant additions: modern Google Ads API compatibility, conversion-goals management, keyword planner integration, asset link removal, geographic / age targeting management, and many production-grade fixes.
+
+> **API version**: the client pins no explicit version, so it runs on whatever `google-ads` defaults to — **v24** with the currently pinned library (31.1.0). It follows the library forward on upgrade rather than being fixed at a version.
 
 ---
 
@@ -10,7 +12,7 @@ This is a **fork** of [`grantweston/google-ads-mcp-complete`](https://github.com
 
 | Area | Additions |
 |------|-----------|
-| **API version** | Migrated to Google Ads API **v23** (Asset API for extensions, modern resource patterns) |
+| **API version** | Migrated off v21 to the modern API surface (Asset API for extensions, modern resource patterns); now tracks the `google-ads` library default (**v24** today) |
 | **Conversions** | Full conversion-action lifecycle + customer/campaign **conversion-goals** management |
 | **Keyword Planner** | `generate_keyword_ideas`, `generate_keyword_historical_metrics` |
 | **Negative keywords** | Now includes campaign-level negatives in `list_keywords`; smart match-type parsing from `"phrase"` and `[exact]` wrapping |
@@ -22,7 +24,7 @@ This is a **fork** of [`grantweston/google-ads-mcp-complete`](https://github.com
 
 ---
 
-## Tool Catalog (~95 tools)
+## Tool Catalog (129 tools)
 
 ### Account & Hierarchy
 `list_accounts` · `get_account_info` · `get_account_hierarchy`
@@ -152,7 +154,7 @@ Add to `~/.claude/mcp.json` (macOS/Linux) or `%USERPROFILE%\.claude\mcp.json` (W
 }
 ```
 
-Restart your client. The server should advertise ~95 tools and a handful of `googleads://` resources (one per accessible customer).
+Restart your client. The server should advertise 129 tools and a handful of `googleads://` resources (one per accessible customer).
 
 ### Resources exposed
 
