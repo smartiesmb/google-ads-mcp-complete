@@ -151,6 +151,12 @@ credentials.json
 *.p12
 *.pem
 
+# Service account keys — NEVER commit (secret private keys)
+*-service-account.json
+*service_account*.json
+api-tout-site-*.json
+*.iam.gserviceaccount.com.json
+
 # OS files
 .DS_Store
 Thumbs.db
